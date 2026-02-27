@@ -1,92 +1,90 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const UserFollows = require('../../models/userFollows');
-const jwt = require('../../middleware/jwt');
+const jwt = require("../../middleware/jwt");
+const { errHandler } = require("../../errorHandler");
+const UserFollows = require("../../models/userFollows");
 
-
-// GET followers list
-router.get('/profile/followers', jwt.authMiddleware, async (req, res) => {
+router.get("/profile/followers", jwt.authMiddleware, async (req, res, next) => {
   try {
-    const userId = req.user.id; // profile owner (self for now)
+    const userId = req.user.id;
 
-    const followers = await UserFollows.getFollowers(
-      userId,        // whose followers
-      userId         // who is viewing (used for is_following)
-    );
+    const followers = await UserFollows.getFollowers(userId, userId);
 
     res.json(followers);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-router.get('/profile/followers/byId/:id', jwt.authMiddleware, async (req, res) => {
-  try {
-    const userId = req.params.id; // profile owner (self for now)
+router.get(
+  "/profile/followers/byId/:id",
+  jwt.authMiddleware,
+  async (req, res, next) => {
+    try {
+      const userId = req.params.id;
 
-    const followers = await UserFollows.getFollowers(
-      userId,        // whose followers
-      userId         // who is viewing (used for is_following)
-    );
+      const followers = await UserFollows.getFollowers(userId, userId);
 
-    res.json(followers);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+      res.json(followers);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
-// GET following list
-router.get('/profile/following', jwt.authMiddleware, async (req, res) => {
+router.get("/profile/following", jwt.authMiddleware, async (req, res, next) => {
   try {
     const following = await UserFollows.getFollowing(req.user.id);
     res.json(following);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-router.get('/profile/following/byId/:id', jwt.authMiddleware, async (req, res) => {
-  try {
-    const userId = req.params.id; 
-    const following = await UserFollows.getFollowing(userId);
-    res.json(following);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+router.get(
+  "/profile/following/byId/:id",
+  jwt.authMiddleware,
+  async (req, res, next) => {
+    try {
+      const userId = req.params.id;
 
+      const following = await UserFollows.getFollowing(userId);
 
-router.post('/users/:userId/follow', jwt.authMiddleware, async (req, res) => {
-  try {
-    const followerId = req.user.id;
-    const followingId = parseInt(req.params.userId);
-
-    if (followerId === followingId) {
-      return res.status(400).json({ error: "You cannot follow yourself" });
+      res.json(following);
+    } catch (err) {
+      next(err);
     }
+  },
+);
 
-    await UserFollows.follow(followerId, followingId);
+router.post(
+  "/follow/:userId",
+  jwt.authMiddleware,
+  async (req, res, next) => {
+    try {
+      console.log("from " + req.user.id + " Follow request received for userId:", req.params.userId);
+      const followerId = req.user.id;
+      const followingId = req.params.userId;
 
-    res.json({ message: 'Followed successfully' });
-  } catch (err) {
-    // SQLite UNIQUE constraint → already followed
-    if (err.message.includes('UNIQUE')) {
-      return res.status(409).json({ error: 'Already following' });
+      if (followerId === followingId)
+        throw errHandler("You can't follow yourself");
+
+      await UserFollows.follow(followerId, followingId);
+
+      res.json({ message: "Followed successfully" });
+    } catch (err) {
+      next(err);
     }
+  },
+);
 
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.delete('/users/:userId/follow', jwt.authMiddleware, async (req, res) => {
+router.delete("/follow/:userId", jwt.authMiddleware, async (req, res) => {
   try {
     await UserFollows.unfollow(req.user.id, req.params.userId);
-    res.json({ message: 'Unfollowed successfully' });
+    res.json({ message: "Unfollowed successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-
 
 module.exports = router;

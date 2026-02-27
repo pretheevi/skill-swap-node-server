@@ -1,4 +1,5 @@
-const connectDb = require('../sql/db');
+const connectDb = require("../db");
+const { v4: uuidv4 } = require("uuid");
 
 class UserModel {
   static async getDb() {
@@ -11,8 +12,8 @@ class UserModel {
       const db = await this.getDb();
       const query = `
         CREATE TABLE IF NOT EXISTS User (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
           email TEXT NOT NULL UNIQUE,
           password TEXT NOT NULL,
           avatar TEXT DEFAULT '',
@@ -33,13 +34,14 @@ class UserModel {
   static async create(userData) {
     try {
       const db = await this.getDb();
+      const userId = uuidv4();
       const { name, email, password, avatar = '', bio = '' } = userData;
       const query = `
-        INSERT INTO User (name, email, password, avatar, bio)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO User (id, name, email, password, avatar, bio)
+        VALUES (?, ?, ?, ?, ?, ?)
       `;
-      const result = await db.run(query, [name, email, password, avatar, bio]);
-      return { id: result.lastID, ...userData };
+      const result = await db.run(query, [userId, name, email, password, avatar, bio]);
+      return { id: userId, ...userData };
     } catch (error) {
       console.error("Error creating user:", error);
       throw error;
@@ -168,10 +170,7 @@ static async searchUsers(search, currentUserId) {
       u.id,
       u.name,
       u.avatar,
-      CASE 
-        WHEN uf.follower_id IS NULL THEN false
-        ELSE true
-      END AS is_following
+      (uf.follower_id IS NOT NULL) AS is_following
     FROM User u
     LEFT JOIN user_follows uf
       ON uf.following_id = u.id

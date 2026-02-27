@@ -1,8 +1,9 @@
-const SkillsModel = require('./skills');
-const SkillMediaModel = require('./skillMedia');
-const userModel = require('./user');
-const UserFollows = require('./userFollows');
-const commentModel = require('./comment');
+const SkillsModel = require('./models/skills');
+const SkillMediaModel = require('./models/skillMedia');
+const userModel = require('./models/user');
+const UserFollows = require('./models/userFollows');
+const commentModel = require('./models/comment');
+const CommentLikesModel = require('./models/commentLikes');
 
 async function initializeDb() {
   await Promise.all([
@@ -11,6 +12,7 @@ async function initializeDb() {
     SkillMediaModel.createTable(),
     commentModel.createTable(),
     UserFollows.createTable(),
+    CommentLikesModel.createTable(),
   ]);
 }
 

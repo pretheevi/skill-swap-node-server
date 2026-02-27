@@ -1,4 +1,5 @@
-const connectDb = require("../sql/db");
+const connectDb = require("../db");
+const {errHandler} = require('../errorHandler');
 
 class UserFollows {
   static async getDb() {
@@ -10,8 +11,8 @@ class UserFollows {
       const db = await this.getDb();
       const query = `
         CREATE TABLE IF NOT EXISTS user_follows (
-          follower_id INTEGER NOT NULL,
-          following_id INTEGER NOT NULL,
+          follower_id TEXT NOT NULL,
+          following_id TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
           FOREIGN KEY (follower_id) REFERENCES User(id) ON DELETE CASCADE,
@@ -113,14 +114,22 @@ static async getFollowers(userId, currentUserId, limit = 20, offset = 0) {
 
 
   static async follow(followerId, followingId) {
-    const db = await this.getDb();
+    try {
+      const db = await this.getDb();
 
-    const query = `
-    INSERT INTO user_follows (follower_id, following_id)
-    VALUES (?, ?)
-  `;
+      const exists = await db.get('SELECT 1 FROM user_follows WHERE follower_id=? AND following_id=?', [followerId, followingId]);
 
-    await db.run(query, [followerId, followingId]);
+      if(exists) throw errHandler(400, 'Already following');
+
+      const query = `
+      INSERT INTO user_follows (follower_id, following_id)
+      VALUES (?, ?)
+    `;
+
+      await db.run(query, [followerId, followingId]);
+    } catch(err) {
+      throw err;
+    }
   }
 
   static async unfollow(followerId, followingId) {

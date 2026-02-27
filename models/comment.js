@@ -1,4 +1,5 @@
-const connectDb = require('../sql/db');
+const connectDb = require("../db");
+const { v4: uuidv4 } = require("uuid");
 
 class CommentModel {
   static async getDb() {
@@ -11,9 +12,9 @@ class CommentModel {
       const db = await this.getDb();
       const query = `
         CREATE TABLE IF NOT EXISTS Comment (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          skill_id INTEGER NOT NULL,
-          user_id INTEGER NOT NULL,
+          id TEXT PRIMARY KEY,
+          skill_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
           text TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -34,13 +35,26 @@ class CommentModel {
   static async create(commentData) {
     try {
       const db = await this.getDb();
+      const commentId = uuidv4();
       const { skill_id, user_id, text } = commentData;
       const query = `
-        INSERT INTO Comment (skill_id, user_id, text)
-        VALUES (?, ?, ?)
+        INSERT INTO Comment (id, skill_id, user_id, text)
+        VALUES (?, ?, ?, ?)
       `;
-      const result = await db.run(query, [skill_id, user_id, text]);
-      return { id: result.lastID, ...commentData };
+      await db.run(query, [commentId, skill_id, user_id, text]);
+      
+      // Fetch full comment with join
+      const selectQuery = `
+        SELECT Comment.*, User.name as user_name, User.avatar as user_avatar
+        FROM Comment
+        JOIN User ON Comment.user_id = User.id
+        WHERE Comment.id = ?
+      `;
+
+      const newComment = await db.get(selectQuery, [commentId]);
+
+      return newComment;
+      
     } catch (error) {
       console.error("Error creating comment:", error);
       throw error;

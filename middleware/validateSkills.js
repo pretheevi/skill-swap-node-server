@@ -5,7 +5,7 @@ class validateSkills {
       return res.status(400).json({ error: "Invalid form data" });
     }
 
-    const { title, category, level, description } = req.body;
+    const { description } = req.body;
 
     if (!title || !category)
       return res.status(400).json({ error: "Title & Category are required" });

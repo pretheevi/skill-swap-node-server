@@ -1,73 +1,89 @@
+````markdown
 # SkillSwap Server
 
-Backend REST API for the SkillSwap platform (Node.js, Express, MongoDB).
+Backend REST API for the SkillSwap platform (Node.js, Express, SQLite). Secure file uploads with Cloudinary v2 + rate limiting.
 
 ## Quick start
 
 Requirements:
 
 - Node.js, npm
-- MongoDB (local or Atlas)
+- SQLite3
 
 Install and run:
 
 ```bash
 cd server
 npm install
-cp .env.example .env   # create .env with required vars (or create manually)
-npm run dev            # starts nodemon + index.js
+cp .env.example .env  # Add CLOUDINARY_* vars
+npm run dev           # nodemon + index.js
+```
+````
+
+**Environment variables:**
+
+```
+PORT=8080
+JWT_SECRET=your_secret
+CLOUDINARY_CLOUD_NAME=your_cloud
+CLOUDINARY_API_KEY=your_key
+CLOUDINARY_API_SECRET=your_secret
 ```
 
-Environment variables (minimum):
+## Security Features
 
-- `PORT` (e.g. 8080)
-- `MONGO_URI` (MongoDB connection string)
-- `JWT_SECRET` (secret for signing tokens)
+- **Rate limiting** - 5 login attempts/15min, 3 registrations/hour
+- **Cloudinary v2** - Secure image uploads with streamifier (no disk writes)
+- **Global error handler** - Custom client messages, full server logging
+- **JWT authentication** - Protected routes
 
 ## Base URL
 
-All mounted routes use the `/api` prefix. Example base URL:
-
 `http://localhost:8080/api`
 
-## Endpoints (summary)
+## Endpoints
 
-Auth
+### Auth (Rate Limited)
 
-- POST `/api/register` — Register a new user
-  - Body: `{ name, email, password }`
-  - Response: `201 Created` on success
-- POST `/api/login` — Login and receive JWT
-  - Body: `{ email, password }`
-  - Response: `200 OK` with `{ token, user }`
+- `POST /api/register` - `{ name, email, password }` → `201`
+- `POST /api/login` - `{ email, password }` → `{ token, user }`
 
-Skills (all under `/api`)
+### Skills (Protected)
 
-- GET `/api/skills` — List all skills (protected)
-  - Requires `Authorization: Bearer <token>` header
-- POST `/api/skills` — Create a new skill (protected)
-  - Body: `{ title, description, level, category, ... }`
-  - Response: `201 Created`
-- GET `/api/skills/:id` — Get a single skill (protected)
-- GET `/api/my-skills` — Get skills owned by the logged-in user (protected)
-- PUT `/api/skills/:id` — Update a skill (protected, owner only)
-- DELETE `/api/skills/:id` — Delete a skill (protected, owner only)
+- `GET /api/skills`
+- `POST /api/skills` - `{ title, description, level, category }` + image upload
+- `GET /api/skills/:id`, `PUT`, `DELETE`
+- `GET /api/my-skills`
 
-Comments
+### Comments (Protected)
 
-- POST `/api/comment` — Create a comment for a skill (protected)
-  - Body: `{ text, skill }` where `skill` is the skill `_id`
-  - Response: `201 Created`
+- `POST /api/comment` - `{ text, skillId }`
 
-Notes
+**Headers:** `Authorization: Bearer <token>`
 
-- All protected routes expect the header: `Authorization: Bearer <JWT_TOKEN>`
-- The project mounts routes at `/api` in `index.js` (see `authentication`, `dashboard/home/skills`, `dashboard/home/commet`).
-- There is a `dashboard/home/users.js` file that defines `GET /users` but it is not mounted in `index.js` by default.
+## File Uploads
+
+Skills support image uploads (`media` field):
+
+```
+Multer memoryStorage → streamifier → Cloudinary v2 → req.file.cloudinary_url
+```
+
+- Max 5MB, JPEG/PNG/WEBP only
+- Auto-optimized (1080x1080, quality: auto)
+- Render-compatible (no disk writes)
+
+## Error Handling
+
+```
+Custom: throw errHandler(400, 'User not found')
+// Client: { success: false, message: "User not found" }
+// Server: Full stack trace logged
+```
 
 ## Examples (curl)
 
-Register:
+**Register (rate limited):**
 
 ```bash
 curl -X POST http://localhost:8080/api/register \
@@ -75,36 +91,35 @@ curl -X POST http://localhost:8080/api/register \
   -d '{"name":"Alice","email":"alice@example.com","password":"secret"}'
 ```
 
-Login (get token):
-
-```bash
-curl -X POST http://localhost:8080/api/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"secret"}'
-```
-
-Create a skill (replace TOKEN):
+**Upload skill with image:**
 
 ```bash
 curl -X POST http://localhost:8080/api/skills \
-  -H "Content-Type: application/json" \
   -H "Authorization: Bearer TOKEN" \
-  -d '{"title":"React Basics","description":"Intro to React","level":"beginner","category":"Web"}'
+  -F "title=React" \
+  -F "description=Learn React" \
+  -F "media=@photo.jpg"
 ```
 
-Add a comment (replace TOKEN):
+## Code Structure
 
-```bash
-curl -X POST http://localhost:8080/api/comment \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer TOKEN" \
-  -d '{"text":"Nice session","skill":"<SKILL_ID>"}'
+```
+index.js              # Server + middleware (rateLimit, CORS, errors)
+middleware/rateLimit.js # Login/register protection
+middleware/multer-cloudinary.js # Streamifier uploads
+authentication/auth.js # JWT login/register
+dashboard/home/skills.js # Skills CRUD + uploads
 ```
 
-## Where to look in the code
+## Production
 
-- Main server: `index.js`
-- Auth routes: `authentication/auth.js`
-- Skills routes: `dashboard/home/skills.js`
-- Comment route: `dashboard/home/commet.js`
-- JWT helper/middleware: `middleware/jwt.js`
+```
+npm i express-rate-limit streamifier helmet
+pm2 start index.js --name skillswap
+npm audit fix  # Security clean
+```
+
+```
+
+**Key updates:** Rate limiting, Cloudinary v2+streamifier, global error handler, file upload details, security section. Production-ready docs! 🚀
+```

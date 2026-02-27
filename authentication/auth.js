@@ -3,29 +3,25 @@ const router = express.Router();
 const Validate = require('./validation');
 const jwt = require('../middleware/jwt');
 const UserModel = require('../models/user');
-const bcrypt = require('bcrypt');  // <-- important
+const bcrypt = require('bcrypt');
+const {loginLimiter, registerLimiter} = require('../middleware/rateLimit');
+const {errHandler} = require('../errorHandler');
 
 // LOGIN USER
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
     // Validate request format
-    if (!Validate.login(email, password)) {
-      return res.status(400).json({ error: 'Invalid credentials format' });
-    }
+    if (!Validate.login(email, password)) throw errHandler(400, 'Invalid credentials format');
 
     // Find user in database
     const user = await UserModel.findByEmail(email);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    console.log('logged in', user);
+    if (!user) throw errHandler(404, 'User not found');
+  
     // Compare hashed password
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ error: 'Incorrect password' });
-    }
+    if (!isMatch) throw errHandler(401, 'Incorrect password');
 
     // Generate JWT
     const token = jwt.sign({ id: user.id, email: user.email });
@@ -42,45 +38,35 @@ router.post('/login', async (req, res) => {
         joined: user.updatedAt
       }
     });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: 'Server error' });
+  } catch (err) {
+    next(err);
   }
 });
 
 
 // REGISTER USER
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res, next) => {
   try {
-    console.log('Registering user with data:', req.body);
     const { name, email, password } = req.body;
 
     // Basic validation
-    if (!name || !Validate.register(name, email, password)) {
-      return res.status(400).json({ error: 'Invalid input data' });
-    }
+    if (!name || !Validate.register(name, email, password)) throw errHandler(400, 'Invalid input data');
 
     // Check if user already exists
     const emailExist = await UserModel.findByEmail(email);
-    if (emailExist && emailExist.email === email) {
-      return res.status(400).json({ error: 'Email already signed up' });
-    }
-    console.log('aaa', emailExist);
+
+    if (emailExist && emailExist.email === email) throw errHandler(400, 'Email already signed up');
+
     const nameExist = await UserModel.findByName(name);
-    if(nameExist && nameExist.name === name) {
-      return res.status(400).json({error: 'Username all ready taken'});
-    }
-    console.log('bbb', nameExist);
+
+    if(nameExist && nameExist.name === name) throw errHandler(400, 'Username already taken');
+    
     // Hash password
     const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Save user
-    const newUser = await UserModel.create({
-      name,
-      email,
-      password: hashedPassword
-    });
+    const newUser = await UserModel.create({name, email, password: hashedPassword});
 
     // Generate token immediately after registration (optional)
     const token = jwt.sign({ email });
@@ -93,11 +79,30 @@ router.post('/register', async (req, res) => {
       }
     });
 
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: 'Server error' });
+  } catch (err) {
+    next(err);
   }
 });
 
+
+router.get('/tokenVerify', jwt.authMiddleware, async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.user.id);
+    if (!user) throw errHandler(404, 'User not found');
+    res.status(200).json({
+      message: "Token is valid",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        bio: user.bio,
+        joined: user.updatedAt
+      }
+    });
+  } catch (error) {
+    console.log(error);
+  }
+});
 
 module.exports = router;

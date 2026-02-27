@@ -1,4 +1,5 @@
-const connectDb = require("../sql/db");
+const connectDb = require("../db");
+const { v4: uuidv4 } = require("uuid");
 
 class SkillsModel {
   static async getDb() {
@@ -11,13 +12,11 @@ class SkillsModel {
     try {
       const query = `
         CREATE TABLE IF NOT EXISTS Skill (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
-            category TEXT NOT NULL CHECK(category IN ('web', 'design', 'data', 'mobile', 'marketing', 'language')),
-            level TEXT CHECK(level IN ('beginner', 'intermediate', 'expert')) DEFAULT 'beginner',
-            description TEXT NOT NULL,
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            description TEXT,
             rating REAL DEFAULT 0,
+            media_ratio TEXT NOT NULL CHECK(media_ratio IN ('1:1', '2:3')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             
@@ -32,30 +31,42 @@ class SkillsModel {
     }
   }
 
-  static async createSkill(skillData) {
+  static async create(skillData) {
     try {
       const db = await this.getDb();
+      const skillId = uuidv4();
       const query = `
-        INSERT INTO Skill (user_id, title, category, level, description)
-        VALUES (?, ?, ?, ?, ?);
+        INSERT INTO Skill (id, user_id, description, media_ratio)
+        VALUES (?, ?, ?, ?);
       `;
-      const {
-        user_id,
-        title,
-        category,
-        level = "beginner",
-        description,
-      } = skillData;
+      const { user_id, description, imageRatio } = skillData;
+      console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", skillData);
       const result = await db.run(query, [
+        skillId,
         user_id,
-        title,
-        category,
-        level,
         description,
+        imageRatio,
       ]);
-      return result.lastID;
+      return { id: skillId, ...skillData };
     } catch (error) {
       console.error("Error creating skill:", error);
+      throw error;
+    }
+  }
+
+  static async getPostCountByUserId(userId) {
+    const db = await this.getDb();
+    try {
+      const query = `
+        SELECT COUNT(*) as postCount
+        FROM Skill
+        WHERE user_id = ?
+      `;
+
+      const result = await db.get(query, [userId]);
+      return result.postCount;
+    } catch (error) {
+      console.error("Error getting post count by user id:", error);
       throw error;
     }
   }
@@ -106,11 +117,9 @@ class SkillsModel {
           u.email AS user_email,
           u.avatar AS user_avatar,
           s.id AS skill_id,
-          s.title AS skill_title,
-          s.category AS skill_category,
-          s.level AS skill_level,
           s.rating,
           s.description AS skill_description,
+          s.media_ratio,
           s.updated_at AS skill_updated_at
         FROM User AS u
         JOIN Skill AS s ON u.id = s.user_id;
@@ -132,10 +141,8 @@ class SkillsModel {
           u.email AS user_email,
           u.avatar AS user_avatar,
           s.id AS skill_id,
-          s.title AS skill_title,
-          s.category AS skill_category,
-          s.level AS skill_level,
           s.description AS skill_description,
+          s.media_ratio,
           s.updated_at AS skill_updated_at
         FROM User AS u
         JOIN Skill AS s ON u.id = s.user_id
@@ -154,14 +161,17 @@ class SkillsModel {
       const skillsWithMediaAndComments = await Promise.all(
         skills.map(async (skill) => {
           const media = await this.getMediaBySkillId(skill.skill_id);
-          const {comment_count} = await this.getCommentBySkillId(skill.skill_id);
+          const { comment_count } = await this.getCommentBySkillId(
+            skill.skill_id,
+          );
           return {
             ...skill,
             media,
             comment_count,
           };
-        })
+        }),
       );
+      // console.log('skillsWithMediaAndComments', skillsWithMediaAndComments);
       return skillsWithMediaAndComments;
     } catch (error) {
       throw error;
@@ -175,35 +185,39 @@ class SkillsModel {
       const skillsWithMediaAndComments = await Promise.all(
         skills.map(async (skill) => {
           const media = await this.getMediaBySkillId(skill.skill_id);
-          const {comment_count} = await this.getCommentBySkillId(skill.skill_id);
+          const { comment_count } = await this.getCommentBySkillId(
+            skill.skill_id,
+          );
           return {
             ...skill,
             media,
             comment_count,
           };
-        })
+        }),
       );
+      // console.log('getAllSkillsWithCommentAndMediaForSpecificUser',skillsWithMediaAndComments);
       return skillsWithMediaAndComments;
     } catch (error) {
       throw error;
     }
   }
-
-  static async getSkillWithCommentsAndMediaBySkillId(skillId){
-    try{
+ 
+  // marketplace page - view post details
+  static async getSkillWithCommentsAndMediaBySkillId(skillId) {
+    try {
       const skill = await this.findSkillById(skillId);
-      if(!skill) return null;
+      if (!skill) return null;
 
-      const media = await this.getMediaBySkillId(skillId)
+      const media = await this.getMediaBySkillId(skillId);
       const comments = await this.getCommentBySkillId(skillId);
 
       const skillWithCommentAndMedia = {
         ...skill,
-        media: media[0],
-        comments
-      }
+        media: media || [],
+        comments,
+      };
       return skillWithCommentAndMedia;
-    } catch(error) {
+    } catch (error) {
       throw error;
     }
   }
@@ -214,7 +228,6 @@ class SkillsModel {
       const query = `
         SELECT *
         FROM Skill
-        JOIN SkillMedia ON Skill.id = SkillMedia.skill_id
         WHERE Skill.id = ?;
       `;
       const skill = await db.get(query, [skill_id]);
@@ -224,51 +237,67 @@ class SkillsModel {
     }
   }
 
-static async updateSkillById(id, updateData) {
-  try {
-    const db = await this.getDb();
-    
-    // Update skill details
-    const query = `
+  static async updateSkillById(id, updateData) {
+    try {
+      const db = await this.getDb();
+
+      // Update skill details
+      const query = `
       UPDATE Skill
       SET title = ?, category = ?, level = ?, description = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
-    const { title, category, level, description } = updateData;
-    const result = await db.run(query, [title, category, level, description, id]);
+      const { title, category, level, description } = updateData;
+      const result = await db.run(query, [
+        title,
+        category,
+        level,
+        description,
+        id,
+      ]);
 
-    // Update media only if provided
-    if (updateData.media) {
-      const { media_type, media_url, public_id } = updateData.media;
-      
-      // Check if media already exists for this skill
-      const checkMediaQuery = `SELECT id FROM SkillMedia WHERE skill_id = ?`;
-      const existingMedia = await db.get(checkMediaQuery, [id]);
-      
-      if (existingMedia) {
-        // Update existing media
-        const mediaUpdateQuery = `
+      // Update media only if provided
+      if (updateData.media) {
+        const { media_type, media_url, public_id } = updateData.media;
+
+        // Check if media already exists for this skill
+        const checkMediaQuery = `SELECT id FROM SkillMedia WHERE skill_id = ?`;
+        const existingMedia = await db.get(checkMediaQuery, [id]);
+
+        if (existingMedia) {
+          // Update existing media
+          const mediaUpdateQuery = `
           UPDATE SkillMedia 
           SET media_type = ?, media_url = ?, public_id = ?
           WHERE skill_id = ?
         `;
-        await db.run(mediaUpdateQuery, [media_type || null, media_url || null, public_id || null, id]);
-      } else if (media_type && media_url) {
-        // Insert new media only if we have actual media data
-        const mediaInsertQuery = `
+          await db.run(mediaUpdateQuery, [
+            media_type || null,
+            media_url || null,
+            public_id || null,
+            id,
+          ]);
+        } else if (media_type && media_url) {
+          // Insert new media only if we have actual media data
+          const mediaInsertQuery = `
           INSERT INTO SkillMedia (skill_id, media_type, media_url, public_id)
           VALUES (?, ?, ?, ?)
         `;
-        await db.run(mediaInsertQuery, [id, media_type, media_url, public_id || null]);
+          await db.run(mediaInsertQuery, [
+            id,
+            media_type,
+            media_url,
+            public_id || null,
+          ]);
+        }
       }
-    }
 
-    return result;
-  } catch (error) {
-    throw error;
+      return result;
+    } catch (error) {
+      throw error;
+    }
   }
-}
-  
+
   static async deleteSkillById(id) {
     try {
       const db = await this.getDb();
