@@ -43,6 +43,7 @@ async function initializatDbAndServer() {
 initializatDbAndServer();
 
 const allowedOrigins = [
+  "https://insta-mirror-client.onrender.com",
   "https://skillswap-aead1adi9-prethiveerajs-projects.vercel.app",
   "https://skillswap-git-main-prethiveerajs-projects.vercel.app",
   "https://skillswap-zeta-seven.vercel.app",
