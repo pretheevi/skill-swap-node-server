@@ -4,12 +4,14 @@ const userModel = require('./models/user');
 const UserFollows = require('./models/userFollows');
 const commentModel = require('./models/comment');
 const CommentLikesModel = require('./models/commentLikes');
+const SkillLikesModel = require('./models/skillLikes');
 
 async function initializeDb() {
   await Promise.all([
     userModel.createTable(),
     SkillsModel.createTable(),
     SkillMediaModel.createTable(),
+    SkillLikesModel.createTable(),
     commentModel.createTable(),
     UserFollows.createTable(),
     CommentLikesModel.createTable(),

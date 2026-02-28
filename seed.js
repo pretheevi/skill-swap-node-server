@@ -1,180 +1,263 @@
-// seed.js - USING YOUR ASYNC DB CONNECTION
+const fs = require('fs').promises;
+const path = require('path');
 const bcrypt = require('bcrypt');
-const connectDb = require('./sql/db'); // Your async db connection
-const initializeDb = require('./models/initializeDb');
+const { v4: uuidv4 } = require('uuid');
+const connectDb = require('./db');
 
-async function hashPassword(password) {
-  return await bcrypt.hash(password, 10);
+const SALT_ROUNDS = 10;
+const PASSWORD_PLAIN = '123456';
+
+const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const randomItems = (arr, count) => {
+  const shuffled = [...arr].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count);
+};
+
+const cleanName = (theme) => {
+  return theme
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .substring(0, 20);
+};
+
+const generateBio = (theme) => `Passionate about ${theme}. Sharing my journey and creations.`;
+
+async function clearTables(db) {
+  console.log('🧹 Clearing existing data...');
+  await db.run('DELETE FROM Comment_Likes');
+  await db.run('DELETE FROM Comment');
+  await db.run('DELETE FROM Skill_Likes');
+  await db.run('DELETE FROM SkillMedia');
+  await db.run('DELETE FROM Skill');
+  await db.run('DELETE FROM user_follows');
+  await db.run('DELETE FROM User');
+  console.log('✅ Tables cleared.');
 }
 
-async function seedData() {
+async function seedDatabase() {
   let db;
-  
   try {
-    console.log('🏗️ Initializing database...');
-    
-    // Initialize database schema first
-    await initializeDb();
-    
-    console.log('🔗 Connecting to database...');
-    // Use your async connectDb function
     db = await connectDb();
-    
-    // Verify tables exist
-    const tableCheck = await db.get(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='User'"
-    );
-    
-    if (!tableCheck) {
-      throw new Error('User table not found after initialization');
+    console.log('✅ Connected to database');
+
+    const seedsPath = path.join(__dirname, 'seedimages.json');
+    const seedsData = await fs.readFile(seedsPath, 'utf8');
+    const usersData = JSON.parse(seedsData);
+    console.log(`✅ Loaded ${usersData.length} user themes from seedimages.json`);
+
+    const hashedPassword = await bcrypt.hash(PASSWORD_PLAIN, SALT_ROUNDS);
+    console.log('✅ Password hashed');
+
+    await clearTables(db);
+
+    const users = [];
+    const userIds = [];
+
+    for (const item of usersData) {
+      // Extract the user key (e.g., "user1") and the theme
+      const [userKey, theme] = Object.entries(item).find(([key]) => key.startsWith('user'));
+      // Extract the image data (all other keys)
+      const imageData = Object.fromEntries(
+        Object.entries(item).filter(([key]) => key !== userKey)
+      );
+
+      const baseName = cleanName(theme);
+      const uniqueName = `${baseName}_${userKey}`;
+      const email = `${uniqueName}@example.com`;
+
+      const user = {
+        id: uuidv4(),
+        name: uniqueName,
+        email,
+        password: hashedPassword,
+        avatar: '',
+        avatar_public_id: null,
+        bio: generateBio(theme),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Store theme along with user data for later use
+      users.push({ ...user, imageData, theme });
+      userIds.push(user.id);
     }
-    
-    console.log('✅ Tables ready!');
 
-    // 1. USERS with REAL bcrypt hashes
-    const users = [
-      { name: 'IceBearDev', email: 'icebear@skillswap.com', password: 'icebear123', avatar: '', bio: 'Full-stack | DSA learner | Chennai' },
-      { name: 'PriyaTamil', email: 'priya@skillswap.com', password: 'priya456', avatar: '', bio: 'தமிழ் React teacher | Hooks expert' },
-      { name: 'DSAGuru2000', email: 'dsa@skillswap.com', password: 'dsa789', avatar: '', bio: 'LeetCode 2000+ | Graph algorithms' },
-      { name: 'ReactNinja', email: 'react@skillswap.com', password: 'ninja101', avatar: '', bio: 'Custom hooks | Performance optimization' },
-      { name: 'BackendBoss', email: 'node@skillswap.com', password: 'boss202', avatar: '', bio: 'Express | Streams | Security' },
-      { name: 'UIUXStar', email: 'design@skillswap.com', password: 'design303', avatar: '', bio: 'Tailwind pro | Responsive design' },
-      { name: 'PythonPro', email: 'python@skillswap.com', password: 'python404', avatar: '', bio: 'FastAPI | ML | Django expert' },
-      { name: 'TamilDev', email: 'tamil@skillswap.com', password: 'tamil505', avatar: '', bio: 'MERN Tamil tutorials | Chennai dev' }
-    ];
-
-    console.log('🔐 Hashing passwords...');
-    for (let user of users) {
-      user.password = await hashPassword(user.password);
-    }
-
-    // Insert users using async/await
-    console.log('👥 Inserting users...');
-    for (let user of users) {
+    // Insert users
+    console.log(`👤 Inserting ${users.length} users...`);
+    for (const user of users) {
       await db.run(
-        `INSERT INTO User (name, email, password, avatar, bio) VALUES (?, ?, ?, ?, ?)`,
-        [user.name, user.email, user.password, user.avatar, user.bio]
+        `INSERT INTO User (id, name, email, password, avatar, avatar_public_id, bio, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          user.id,
+          user.name,
+          user.email,
+          user.password,
+          user.avatar,
+          user.avatar_public_id,
+          user.bio,
+          user.created_at,
+          user.updated_at,
+        ]
       );
     }
-    console.log(`✅ Inserted ${users.length} users`);
 
-    // 2. SKILLS (12 skills)
-    const skills = [
-      [1, 'React Hooks: useState, useEffect, useContext with projects', 4.8],
-      [2, 'தமிழ் DSA: Array, LinkedList, Stack full explanation', 4.9],
-      [3, 'LeetCode Top 100: Two Sum, LRU Cache, Graphs solved', 4.7],
-      [4, 'Build custom React hooks for real apps', 4.6],
-      [5, 'Express rate limiting + security best practices', 4.9],
-      [1, 'MERN Stack: Complete SkillSwap clone walkthrough', 4.8],
-      [6, 'Tailwind CSS: Responsive design utility classes', 4.5],
-      [7, 'FastAPI: Modern Python backend framework', 4.7],
-      [2, 'React Context API: State without Redux', 4.6],
-      [3, 'Binary Search Trees: Insert, delete, search', 4.8],
-      [8, 'Node.js Streams: Multer + Cloudinary uploads', 4.9],
-      [4, 'useCallback vs useMemo: React performance', 4.7]
-    ];
+    // Create skills and media
+    const skillIds = [];
+    console.log('🖼️  Creating skills and media...');
 
-    console.log('📚 Inserting skills...');
-    for (let skill of skills) {
-      await db.run(
-        'INSERT INTO Skill (user_id, description, rating) VALUES (?, ?, ?)',
-        skill
-      );
+    for (const user of users) {
+      // Collect all images with their ratios
+      const allImages = [];
+      for (const [ratio, urls] of Object.entries(user.imageData)) {
+        if (!Array.isArray(urls)) continue;
+        for (const url of urls) {
+          if (url) allImages.push({ url, ratio });
+        }
+      }
+
+      // Shuffle the images for this user
+      const shuffled = allImages.sort(() => Math.random() - 0.5);
+
+      // Create a skill for each image
+      for (const { url, ratio } of shuffled) {
+        const skillId = uuidv4();
+        const skillDescription = `Check out my latest ${user.theme} creation! #${user.theme.replace(/\s+/g, '')}`;
+        const now = new Date().toISOString();
+
+        await db.run(
+          `INSERT INTO Skill (id, user_id, description, media_ratio, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [skillId, user.id, skillDescription, ratio, now, now]
+        );
+        skillIds.push(skillId);
+
+        const mediaId = uuidv4();
+        await db.run(
+          `INSERT INTO SkillMedia (id, skill_id, media_type, media_url, public_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [mediaId, skillId, 'image', url, null, now]
+        );
+      }
     }
-    console.log(`✅ Inserted ${skills.length} skills`);
 
-    // 3. SKILL MEDIA (12 items)
-    const media = [
-      [1, 'https://res.cloudinary.com/demo/image1.jpg', 'skillswap/posts/react1', 'image'],
-      [2, 'https://res.cloudinary.com/demo/image2.jpg', 'skillswap/posts/dsa1', 'image'],
-      [3, 'https://res.cloudinary.com/demo/image3.jpg', 'skillswap/posts/leetcode1', 'image'],
-      [5, 'https://res.cloudinary.com/demo/image5.gif', 'skillswap/posts/rate-limit', 'image'],
-      [6, 'https://res.cloudinary.com/demo/image6.jpg', 'skillswap/posts/mern1', 'image'],
-      [7, 'https://res.cloudinary.com/demo/image7.jpg', 'skillswap/posts/tailwind1', 'image'],
-      [9, 'https://res.cloudinary.com/demo/image9.jpg', 'skillswap/posts/context1', 'image'],
-      [10, 'https://res.cloudinary.com/demo/image10.gif', 'skillswap/posts/bst1', 'image'],
-      [11, 'https://res.cloudinary.com/demo/image11.jpg', 'skillswap/posts/streams1', 'image'],
-      [1, 'https://res.cloudinary.com/demo/video1.mp4', 'skillswap/posts/react-video', 'video'],
-      [6, 'https://res.cloudinary.com/demo/image12.jpg', 'skillswap/posts/mern2', 'image'],
-      [11, 'https://res.cloudinary.com/demo/image13.gif', 'skillswap/posts/streams2', 'image']
-    ];
+    console.log(`✅ Created ${skillIds.length} skills with media.`);
 
-    console.log('🖼️ Inserting media...');
-    for (let m of media) {
-      await db.run(
-        'INSERT INTO SkillMedia (skill_id, media_url, public_id, media_type) VALUES (?, ?, ?, ?)',
-        m
-      );
+    // Generate random follows (each user follows 3–10 others)
+    console.log('🔗 Creating user follows...');
+    const followPairs = new Set();
+
+    for (const followerId of userIds) {
+      const followCount = randomInt(3, 10);
+      const potentialFollowings = userIds.filter(id => id !== followerId);
+      const selected = randomItems(potentialFollowings, Math.min(followCount, potentialFollowings.length));
+
+      for (const followingId of selected) {
+        const pair = `${followerId}-${followingId}`;
+        if (!followPairs.has(pair)) {
+          followPairs.add(pair);
+          await db.run(
+            `INSERT INTO user_follows (follower_id, following_id, created_at)
+             VALUES (?, ?, ?)`,
+            [followerId, followingId, new Date().toISOString()]
+          );
+        }
+      }
     }
-    console.log(`✅ Inserted ${media.length} media items`);
+    console.log(`✅ Created ${followPairs.size} follow relationships.`);
 
-    // 4. COMMENTS (15 items)
-    const comments = [
-      [1, 2, 'IceBear அண்ணா super clear! Context part perfect 👍'],
-      [1, 3, 'useCallback example fixed my infinite re-renders'],
-      [2, 1, 'தமிழ் DSA explanation rocks for beginners!'],
-      [3, 4, 'LeetCode roadmap is gold for interviews'],
-      [5, 1, 'Rate limiting implementation ready for prod'],
-      [6, 7, 'MERN project source code GitHub link?'],
-      [7, 6, 'Tailwind responsive design made easy'],
-      [9, 1, 'Priya Context tutorial clarity 10/10'],
-      [10, 2, 'BST animation visualization helped tremendously'],
-      [11, 4, 'Streams + Cloudinary flow diagram perfect!'],
-      [1, 8, 'useRef DOM access example spot on'],
-      [5, 3, 'Security middleware config copied!'],
-      [6, 2, 'Fullstack MERN project > 100 theory videos'],
-      [12, 5, 'Performance hooks comparison cleared confusion'],
-      [3, 6, 'Graph algorithms roadmap appreciated']
-    ];
+    // Generate random likes on skills
+    console.log('❤️  Adding likes to skills...');
+    let likeCount = 0;
 
-    console.log('💬 Inserting comments...');
-    for (let c of comments) {
-      await db.run(
-        'INSERT INTO Comment (skill_id, user_id, text) VALUES (?, ?, ?)',
-        c
-      );
+    for (const skillId of skillIds) {
+      const skillOwner = await db.get(`SELECT user_id FROM Skill WHERE id = ?`, [skillId]);
+      if (!skillOwner) continue;
+
+      const possibleLikers = userIds.filter(id => id !== skillOwner.user_id);
+      const numberOfLikes = randomInt(0, 15);
+      const likers = randomItems(possibleLikers, Math.min(numberOfLikes, possibleLikers.length));
+
+      for (const likerId of likers) {
+        try {
+          await db.run(
+            `INSERT INTO Skill_Likes (skill_id, user_id, created_at)
+             VALUES (?, ?, ?)`,
+            [skillId, likerId, new Date().toISOString()]
+          );
+          likeCount++;
+        } catch (err) {
+          // ignore duplicates
+        }
+      }
     }
-    console.log(`✅ Inserted ${comments.length} comments`);
+    console.log(`✅ Added ${likeCount} skill likes.`);
 
-    // 5. FOLLOWS
-    const follows = [
-      [2, 1], [4, 1], [1, 3], [5, 1], 
-      [6, 7], [8, 5], [1, 2], [3, 4]
-    ];
+    // Generate random comments
+    console.log('💬 Adding comments...');
+    const commentIds = [];
 
-    console.log('👥 Inserting follows...');
-    for (let f of follows) {
-      await db.run(
-        'INSERT INTO user_follows (follower_id, following_id) VALUES (?, ?)',
-        f
-      );
+    for (const skillId of skillIds) {
+      const numberOfComments = randomInt(0, 5);
+      for (let i = 0; i < numberOfComments; i++) {
+        const commenterId = userIds[Math.floor(Math.random() * userIds.length)];
+        const commentId = uuidv4();
+        const commentText = [
+          'Awesome! 👏',
+          'Love this!',
+          'Great work!',
+          'Inspirational 🔥',
+          'Keep it up!',
+          'So creative!',
+          'This is amazing 😍',
+          'Nice one!',
+          '👍👍',
+          'Wow!'
+        ][Math.floor(Math.random() * 10)];
+
+        await db.run(
+          `INSERT INTO Comment (id, skill_id, user_id, text, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [commentId, skillId, commenterId, commentText, new Date().toISOString(), new Date().toISOString()]
+        );
+        commentIds.push(commentId);
+      }
     }
-    console.log(`✅ Inserted ${follows.length} follows`);
+    console.log(`✅ Added ${commentIds.length} comments.`);
 
-    console.log('\n🎉 SEED COMPLETE!');
-    console.log('========================');
-    console.log('👥 8 Users');
-    console.log('📚 12 Skills');
-    console.log('🖼️ 12 Media');
-    console.log('💬 15 Comments');
-    console.log('👥 8 Follows');
-    console.log('========================\n');
-    
-  } catch (err) {
-    console.error('❌ SEED FAILED:', err.message);
-    console.error('Stack trace:', err.stack);
-    process.exit(1);
+    // Generate random likes on comments
+    console.log('❤️  Adding comment likes...');
+    let commentLikeCount = 0;
+
+    for (const commentId of commentIds) {
+      const commentOwner = await db.get(`SELECT user_id FROM Comment WHERE id = ?`, [commentId]);
+      if (!commentOwner) continue;
+
+      const possibleLikers = userIds.filter(id => id !== commentOwner.user_id);
+      const numberOfLikes = randomInt(0, 8);
+      const likers = randomItems(possibleLikers, Math.min(numberOfLikes, possibleLikers.length));
+
+      for (const likerId of likers) {
+        try {
+          await db.run(
+            `INSERT INTO Comment_Likes (comment_id, user_id, created_at)
+             VALUES (?, ?, ?)`,
+            [commentId, likerId, new Date().toISOString()]
+          );
+          commentLikeCount++;
+        } catch (err) {
+          // ignore duplicates
+        }
+      }
+    }
+    console.log(`✅ Added ${commentLikeCount} comment likes.`);
+
+    console.log('🎉 Seeding completed successfully!');
+  } catch (error) {
+    console.error('❌ Seeding failed:', error);
   } finally {
-    if (db) {
-      await db.close();
-      console.log('🔒 Database connection closed');
-    }
+    if (db) await db.close();
   }
 }
 
-// Check if this is the main module being run
-if (require.main === module) {
-  seedData();
-}
-
-module.exports = seedData;
+seedDatabase();

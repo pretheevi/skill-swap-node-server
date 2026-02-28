@@ -15,7 +15,7 @@ const loginLimiter = rateLimit({
 
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
+  max: 5,
   message: (req, res) => {
     return res.status(429).json({
       success: false,
@@ -26,7 +26,7 @@ const registerLimiter = rateLimit({
 
 const followUnfollowLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 10,
+  max: 30,
   message: (req, res) => {
     return res.status(429).json({
       success: false,
@@ -37,13 +37,30 @@ const followUnfollowLimiter = rateLimit({
 
 const commentLikeLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 min
-  max: 20,
+  max: 30,
   message: (req, res) => {
     return res.status(429).json({
       success: false,
-      message: "Too many attemps, wait 15 minutes",
+      message: "Too many attempts, wait 15 minutes",
     });
   }
 });
 
-module.exports = { loginLimiter, registerLimiter, followUnfollowLimiter, commentLikeLimiter };
+const skillLikeLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  message: (req, res) => {
+    return res.status(429).json({
+      success: false,
+      message: "Too many attempts, wait 15 minutes",
+    })
+  }
+})
+
+module.exports = { 
+  loginLimiter, 
+  registerLimiter,
+  followUnfollowLimiter, 
+  commentLikeLimiter,
+  skillLikeLimiter,
+};

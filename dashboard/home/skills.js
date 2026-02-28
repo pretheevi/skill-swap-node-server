@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const SkillsModel = require("../../models/skills");
 const SkillMediaModel = require("../../models/skillMedia");
+const SkillLikesModel = require('../../models/skillLikes');
 const jwt = require("../../middleware/jwt");
 const { uploadPostMedia } = require("../../middleware/upload");
 const cloudinary = require("../../config/cloudinary");
@@ -47,7 +48,8 @@ router.post(
 
 router.get("/skills", jwt.authMiddleware, async (req, res, next) => {
   try {
-    const skills = await SkillsModel.getAllSkillsWithCommentAndMedia();
+    const userId = req.user.id;
+    const skills = await SkillsModel.getAllSkillsWithCommentAndMedia(userId);
     res.json(skills);
   } catch (err) {
     next(err);
@@ -79,8 +81,10 @@ router.get("/my-skillsById/:id", jwt.authMiddleware, async (req, res, next) => {
 
 router.get("/skills/:id", jwt.authMiddleware, async (req, res, next) => {
   try {
+    const userId = req.user.id;
     const skill = await SkillsModel.getSkillWithCommentsAndMediaBySkillId(
       req.params.id,
+      userId
     );
 
     if (!skill) throw errHandler(404, "Skill not found");

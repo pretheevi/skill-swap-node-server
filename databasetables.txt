@@ -1,0 +1,82 @@
+CREATE TABLE IF NOT EXISTS User (
+id TEXT PRIMARY KEY,
+name TEXT NOT NULL UNIQUE,
+email TEXT NOT NULL UNIQUE,
+password TEXT NOT NULL,
+avatar TEXT DEFAULT '',
+avatar_public_id TEXT,
+bio TEXT DEFAULT '',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_follows (
+follower_id TEXT NOT NULL,
+following_id TEXT NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+FOREIGN KEY (follower_id) REFERENCES User(id) ON DELETE CASCADE,
+FOREIGN KEY (following_id) REFERENCES User(id) ON DELETE CASCADE,
+
+UNIQUE (follower_id, following_id),
+CHECK (follower_id != following_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS Skill (
+id TEXT PRIMARY KEY,
+user_id TEXT NOT NULL,
+description TEXT,
+media_ratio TEXT NOT NULL CHECK(media_ratio IN ('1:1', '2:3')),
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+-- Foreign key constraint
+FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS SkillMedia (
+id TEXT PRIMARY KEY,
+skill_id TEXT NOT NULL,
+media_type TEXT CHECK(media_type IN ('image', 'video')) DEFAULT 'image',
+media_url TEXT NOT NULL,
+public_id TEXT,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+FOREIGN KEY (skill_id) REFERENCES Skill(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Skill_Likes (
+skill_id TEXT NOT NULL,
+user_id TEXT NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (skill_id, user_id),
+
+FOREIGN KEY (skill_id) REFERENCES Skill(id) ON DELETE CASCADE,
+FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Comment (
+id TEXT PRIMARY KEY,
+skill_id TEXT NOT NULL,
+user_id TEXT NOT NULL,
+text TEXT NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+-- Foreign key constraints
+FOREIGN KEY (skill_id) REFERENCES Skill(id) ON DELETE CASCADE,
+FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Comment_Likes (
+comment_id TEXT NOT NULL,
+user_id TEXT NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+PRIMARY KEY (comment_id, user_id),
+
+FOREIGN KEY (comment_id) REFERENCES Comment(id) ON DELETE CASCADE,
+FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
+);

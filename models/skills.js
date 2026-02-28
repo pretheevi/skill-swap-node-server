@@ -1,5 +1,6 @@
 const connectDb = require("../db");
 const { v4: uuidv4 } = require("uuid");
+const SkillLikesModel = require('./skillLikes');
 
 class SkillsModel {
   static async getDb() {
@@ -15,7 +16,6 @@ class SkillsModel {
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             description TEXT,
-            rating REAL DEFAULT 0,
             media_ratio TEXT NOT NULL CHECK(media_ratio IN ('1:1', '2:3')),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -117,7 +117,6 @@ class SkillsModel {
           u.email AS user_email,
           u.avatar AS user_avatar,
           s.id AS skill_id,
-          s.rating,
           s.description AS skill_description,
           s.media_ratio,
           s.updated_at AS skill_updated_at
@@ -155,19 +154,21 @@ class SkillsModel {
     }
   }
 
-  static async getAllSkillsWithCommentAndMedia() {
+  static async getAllSkillsWithCommentAndMedia(userId) {
     try {
       const skills = await this.getAllSkills();
       const skillsWithMediaAndComments = await Promise.all(
         skills.map(async (skill) => {
           const media = await this.getMediaBySkillId(skill.skill_id);
-          const { comment_count } = await this.getCommentBySkillId(
-            skill.skill_id,
-          );
+          const { comment_count } = await this.getCommentBySkillId(skill.skill_id,);
+          const like_count = await SkillLikesModel.countBySkillId(skill.skill_id);
+          const user_liked = await SkillLikesModel.hasUserLiked(skill.skill_id, userId)
           return {
             ...skill,
             media,
             comment_count,
+            like_count,
+            user_liked,
           };
         }),
       );
@@ -178,20 +179,22 @@ class SkillsModel {
     }
   }
 
-  static async getAllSkillsWithCommentAndMediaForSpecificUser(id) {
+  static async getAllSkillsWithCommentAndMediaForSpecificUser(userId) {
     try {
-      const skills = await this.getSkillsByUserId(id);
+      const skills = await this.getSkillsByUserId(userId);
       if (!skills) return null;
       const skillsWithMediaAndComments = await Promise.all(
         skills.map(async (skill) => {
           const media = await this.getMediaBySkillId(skill.skill_id);
-          const { comment_count } = await this.getCommentBySkillId(
-            skill.skill_id,
-          );
+          const { comment_count } = await this.getCommentBySkillId(skill.skill_id,);
+          const like_count = await SkillLikesModel.countBySkillId(skill.skill_id);
+          const user_liked = await SkillLikesModel.hasUserLiked(skill.skill_id, userId)
           return {
             ...skill,
             media,
             comment_count,
+            like_count,
+            user_liked,
           };
         }),
       );
@@ -203,18 +206,22 @@ class SkillsModel {
   }
  
   // marketplace page - view post details
-  static async getSkillWithCommentsAndMediaBySkillId(skillId) {
+  static async getSkillWithCommentsAndMediaBySkillId(skillId, userId) {
     try {
       const skill = await this.findSkillById(skillId);
       if (!skill) return null;
 
       const media = await this.getMediaBySkillId(skillId);
       const comments = await this.getCommentBySkillId(skillId);
+      const like_count = await SkillLikesModel.countBySkillId(skillId);
+      const user_liked = await SkillLikesModel.hasUserLiked(skillId, userId)
 
       const skillWithCommentAndMedia = {
         ...skill,
         media: media || [],
-        comments,
+        comment_count: comments.comment_count,
+        like_count,
+        user_liked,
       };
       return skillWithCommentAndMedia;
     } catch (error) {

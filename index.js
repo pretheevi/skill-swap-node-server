@@ -15,6 +15,7 @@ const skillRoutes = require("./dashboard/home/skills");
 const comment = require("./dashboard/home/commet");
 const userFollows = require("./dashboard/profile/userFollower");
 const exploreRoutes = require("./dashboard/home/explore");
+const skillLikeRoutes = require("./dashboard/home/skillLike");
 
 // initialize Database, Create server and WebSocket server
 const app = express();
@@ -74,6 +75,7 @@ app.use("/api", authentication);
 app.use("/api", userRoutes);
 app.use("/api", userFollows);
 app.use("/api", skillRoutes);
+app.use("/api", skillLikeRoutes);
 app.use("/api", comment);
 app.use("/api", exploreRoutes);
 
