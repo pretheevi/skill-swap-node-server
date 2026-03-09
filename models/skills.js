@@ -4,27 +4,23 @@ const SkillLikesModel = require('./skillLikes');
 
 class SkillsModel {
   static async getDb() {
-    const db = await connectDb();
-    return db;
+    return await connectDb();
   }
 
   static async createTable() {
     const db = await this.getDb();
     try {
-      const query = `
+      await db.execute(`
         CREATE TABLE IF NOT EXISTS Skill (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            description TEXT,
-            media_ratio TEXT NOT NULL CHECK(media_ratio IN ('1:1', '2:3')),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            
-            -- Foreign key constraint
-            FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          description TEXT,
+          media_ratio TEXT NOT NULL CHECK(media_ratio IN ('1:1', '2:3')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
         );
-      `;
-      await db.run(query);
+      `);
     } catch (error) {
       console.error("Error creating skills table:", error);
       throw error;
@@ -35,18 +31,11 @@ class SkillsModel {
     try {
       const db = await this.getDb();
       const skillId = uuidv4();
-      const query = `
-        INSERT INTO Skill (id, user_id, description, media_ratio)
-        VALUES (?, ?, ?, ?);
-      `;
       const { user_id, description, imageRatio } = skillData;
-      console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", skillData);
-      const result = await db.run(query, [
-        skillId,
-        user_id,
-        description,
-        imageRatio,
-      ]);
+      await db.execute({
+        sql: `INSERT INTO Skill (id, user_id, description, media_ratio) VALUES (?, ?, ?, ?)`,
+        args: [skillId, user_id, description, imageRatio],
+      });
       return { id: skillId, ...skillData };
     } catch (error) {
       console.error("Error creating skill:", error);
@@ -55,16 +44,13 @@ class SkillsModel {
   }
 
   static async getPostCountByUserId(userId) {
-    const db = await this.getDb();
     try {
-      const query = `
-        SELECT COUNT(*) as postCount
-        FROM Skill
-        WHERE user_id = ?
-      `;
-
-      const result = await db.get(query, [userId]);
-      return result.postCount;
+      const db = await this.getDb();
+      const result = await db.execute({
+        sql: `SELECT COUNT(*) as postCount FROM Skill WHERE user_id = ?`,
+        args: [userId],
+      });
+      return result.rows[0].postCount;
     } catch (error) {
       console.error("Error getting post count by user id:", error);
       throw error;
@@ -74,18 +60,20 @@ class SkillsModel {
   static async getMediaBySkillId(skill_id) {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT
-          m.id AS media_id,
-          m.skill_id AS media_skill_id,
-          m.media_url,
-          m.media_type,
-          m.created_at
-        FROM SkillMedia AS m
-        WHERE m.skill_id = ?;
-      `;
-      const media = await db.all(query, [skill_id]);
-      return media;
+      const result = await db.execute({
+        sql: `
+          SELECT
+            m.id AS media_id,
+            m.skill_id AS media_skill_id,
+            m.media_url,
+            m.media_type,
+            m.created_at
+          FROM SkillMedia AS m
+          WHERE m.skill_id = ?
+        `,
+        args: [skill_id],
+      });
+      return result.rows;
     } catch (error) {
       throw error;
     }
@@ -94,14 +82,11 @@ class SkillsModel {
   static async getCommentBySkillId(skill_id) {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT
-          COUNT(*) AS comment_count
-        FROM Comment AS c
-        WHERE c.skill_id = ?;
-      `;
-      const comments = await db.get(query, [skill_id]);
-      return comments;
+      const result = await db.execute({
+        sql: `SELECT COUNT(*) AS comment_count FROM Comment AS c WHERE c.skill_id = ?`,
+        args: [skill_id],
+      });
+      return result.rows[0];
     } catch (error) {
       throw error;
     }
@@ -110,30 +95,7 @@ class SkillsModel {
   static async getAllSkills() {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT
-          u.id AS user_id,
-          u.name AS user_name,
-          u.email AS user_email,
-          u.avatar AS user_avatar,
-          s.id AS skill_id,
-          s.description AS skill_description,
-          s.media_ratio,
-          s.updated_at AS skill_updated_at
-        FROM User AS u
-        JOIN Skill AS s ON u.id = s.user_id;
-      `;
-      const skills = await db.all(query);
-      return skills;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  static async getSkillsByUserId(id) {
-    try {
-      const db = await this.getDb();
-      const query = `
+      const result = await db.execute(`
         SELECT
           u.id AS user_id,
           u.name AS user_name,
@@ -145,35 +107,92 @@ class SkillsModel {
           s.updated_at AS skill_updated_at
         FROM User AS u
         JOIN Skill AS s ON u.id = s.user_id
-        WHERE s.user_id = ?;
-      `;
-      const skill = await db.all(query, [id]);
-      return skill;
+      `);
+      return result.rows;
     } catch (error) {
       throw error;
     }
   }
 
-  static async getAllSkillsWithCommentAndMedia(userId) {
+  static async getSkillsByIds(skillIds) {
     try {
-      const skills = await this.getAllSkills();
+      const db = await this.getDb();
+      const result = await Promise.all(
+        skillIds.map(async (id) => {
+          const r = await db.execute({
+            sql: `
+              SELECT
+                u.id AS user_id,
+                u.name AS user_name,
+                u.email AS user_email,
+                u.avatar AS user_avatar,
+                s.id AS skill_id,
+                s.description AS skill_description,
+                s.media_ratio,
+                s.updated_at AS skill_updated_at
+              FROM User AS u
+              JOIN Skill AS s ON u.id = s.user_id
+              WHERE s.id = ?
+            `,
+            args: [id],
+          });
+          return r.rows[0];
+        })
+      );
+      return result.filter(Boolean); // remove nulls if skill not found
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async getRecommendedSkills(recommends) {
+    try {
+      const skillIds = recommends.map(r => r.skill_id);
+      return await this.getSkillsByIds(skillIds);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async getAllSkillsWithCommentAndMedia(userId, recommends) {
+    try {
+      const skills = await this.getRecommendedSkills(recommends);
       const skillsWithMediaAndComments = await Promise.all(
         skills.map(async (skill) => {
           const media = await this.getMediaBySkillId(skill.skill_id);
-          const { comment_count } = await this.getCommentBySkillId(skill.skill_id,);
+          const { comment_count } = await this.getCommentBySkillId(skill.skill_id);
           const like_count = await SkillLikesModel.countBySkillId(skill.skill_id);
-          const user_liked = await SkillLikesModel.hasUserLiked(skill.skill_id, userId)
-          return {
-            ...skill,
-            media,
-            comment_count,
-            like_count,
-            user_liked,
-          };
-        }),
+          const user_liked = await SkillLikesModel.hasUserLiked(skill.skill_id, userId);
+          return { ...skill, media, comment_count, like_count, user_liked };
+        })
       );
-      // console.log('skillsWithMediaAndComments', skillsWithMediaAndComments);
       return skillsWithMediaAndComments;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async getSkillsByUserId(id) {
+    try {
+      const db = await this.getDb();
+      const result = await db.execute({
+        sql: `
+          SELECT
+            u.id AS user_id,
+            u.name AS user_name,
+            u.email AS user_email,
+            u.avatar AS user_avatar,
+            s.id AS skill_id,
+            s.description AS skill_description,
+            s.media_ratio,
+            s.updated_at AS skill_updated_at
+          FROM User AS u
+          JOIN Skill AS s ON u.id = s.user_id
+          WHERE s.user_id = ?
+        `,
+        args: [id],
+      });
+      return result.rows;
     } catch (error) {
       throw error;
     }
@@ -186,44 +205,27 @@ class SkillsModel {
       const skillsWithMediaAndComments = await Promise.all(
         skills.map(async (skill) => {
           const media = await this.getMediaBySkillId(skill.skill_id);
-          const { comment_count } = await this.getCommentBySkillId(skill.skill_id,);
+          const { comment_count } = await this.getCommentBySkillId(skill.skill_id);
           const like_count = await SkillLikesModel.countBySkillId(skill.skill_id);
-          const user_liked = await SkillLikesModel.hasUserLiked(skill.skill_id, userId)
-          return {
-            ...skill,
-            media,
-            comment_count,
-            like_count,
-            user_liked,
-          };
-        }),
+          const user_liked = await SkillLikesModel.hasUserLiked(skill.skill_id, userId);
+          return { ...skill, media, comment_count, like_count, user_liked };
+        })
       );
-      // console.log('getAllSkillsWithCommentAndMediaForSpecificUser',skillsWithMediaAndComments);
       return skillsWithMediaAndComments;
     } catch (error) {
       throw error;
     }
   }
- 
-  // marketplace page - view post details
+
   static async getSkillWithCommentsAndMediaBySkillId(skillId, userId) {
     try {
       const skill = await this.findSkillById(skillId);
       if (!skill) return null;
-
       const media = await this.getMediaBySkillId(skillId);
       const comments = await this.getCommentBySkillId(skillId);
       const like_count = await SkillLikesModel.countBySkillId(skillId);
-      const user_liked = await SkillLikesModel.hasUserLiked(skillId, userId)
-
-      const skillWithCommentAndMedia = {
-        ...skill,
-        media: media || [],
-        comment_count: comments.comment_count,
-        like_count,
-        user_liked,
-      };
-      return skillWithCommentAndMedia;
+      const user_liked = await SkillLikesModel.hasUserLiked(skillId, userId);
+      return { ...skill, media: media || [], comment_count: comments.comment_count, like_count, user_liked };
     } catch (error) {
       throw error;
     }
@@ -232,87 +234,36 @@ class SkillsModel {
   static async findSkillById(skill_id) {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT *
-        FROM Skill
-        WHERE Skill.id = ?;
-      `;
-      const skill = await db.get(query, [skill_id]);
-      return skill;
+      const result = await db.execute({
+        sql: `SELECT * FROM Skill WHERE id = ?`,
+        args: [skill_id],
+      });
+      return result.rows[0] || null;
     } catch (error) {
       throw error;
     }
   }
 
-  static async updateSkillById(id, updateData) {
+  static async updateSkillDescription(id, description) {
     try {
       const db = await this.getDb();
-
-      // Update skill details
-      const query = `
-      UPDATE Skill
-      SET title = ?, category = ?, level = ?, description = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `;
-      const { title, category, level, description } = updateData;
-      const result = await db.run(query, [
-        title,
-        category,
-        level,
-        description,
-        id,
-      ]);
-
-      // Update media only if provided
-      if (updateData.media) {
-        const { media_type, media_url, public_id } = updateData.media;
-
-        // Check if media already exists for this skill
-        const checkMediaQuery = `SELECT id FROM SkillMedia WHERE skill_id = ?`;
-        const existingMedia = await db.get(checkMediaQuery, [id]);
-
-        if (existingMedia) {
-          // Update existing media
-          const mediaUpdateQuery = `
-          UPDATE SkillMedia 
-          SET media_type = ?, media_url = ?, public_id = ?
-          WHERE skill_id = ?
-        `;
-          await db.run(mediaUpdateQuery, [
-            media_type || null,
-            media_url || null,
-            public_id || null,
-            id,
-          ]);
-        } else if (media_type && media_url) {
-          // Insert new media only if we have actual media data
-          const mediaInsertQuery = `
-          INSERT INTO SkillMedia (skill_id, media_type, media_url, public_id)
-          VALUES (?, ?, ?, ?)
-        `;
-          await db.run(mediaInsertQuery, [
-            id,
-            media_type,
-            media_url,
-            public_id || null,
-          ]);
-        }
-      }
-
-      return result;
+      await db.execute({
+        sql: `UPDATE Skill SET description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        args: [description, id],
+      });
+      return true;
     } catch (error) {
-      throw error;
+      throw new Error(`updateSkillDescription failed: ${error.message}`);
     }
   }
 
   static async deleteSkillById(id) {
     try {
       const db = await this.getDb();
-      const query = `
-        DELETE FROM Skill
-        WHERE id = ?
-      `;
-      await db.run(query, [id]);
+      await db.execute({
+        sql: `DELETE FROM Skill WHERE id = ?`,
+        args: [id],
+      });
       return true;
     } catch (error) {
       throw error;

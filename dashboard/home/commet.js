@@ -207,4 +207,18 @@ router.get('/comment/:comment_id/liked', jwt.authMiddleware, async (req, res, ne
   }
 });
 
+router.delete('/comment/:comment_id', jwt.authMiddleware, async (req, res) => {
+  try {
+    const commentId = req.params.comment_id;
+
+    await Comment.delete(commentId);
+    res.status(200).json({
+      commentId,
+      message: 'comment deleted successfully',
+    });
+  } catch(error) {
+    next(error);
+  }
+})
+
 module.exports = router;

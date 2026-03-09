@@ -1,179 +1,168 @@
 const connectDb = require("../db");
-const { v4: uuidv4 } = require("uuid");
 
 class CommentLikesModel {
   static async getDb() {
-    const db = await connectDb();
-    return db;
+    return await connectDb();
   }
 
   static async createTable() {
     try {
       const db = await this.getDb();
-      const query = `
+      await db.execute(`
         CREATE TABLE IF NOT EXISTS Comment_Likes (
           comment_id TEXT NOT NULL,
           user_id TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
           PRIMARY KEY (comment_id, user_id),
-
           FOREIGN KEY (comment_id) REFERENCES Comment(id) ON DELETE CASCADE,
           FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
         );
-      `;
-      await db.run(query);
+      `);
     } catch (error) {
       console.error("Error creating comment_likes table:", error);
       throw error;
     }
   }
 
-  // Add a like (since it's a composite primary key, no uuid needed)
   static async addLike(commentId, userId) {
     try {
       const db = await this.getDb();
-      const query = `
-        INSERT INTO Comment_Likes (comment_id, user_id)
-        VALUES (?, ?)
-      `;
-      await db.run(query, [commentId, userId]);
-      
-      // Return the like with additional info
-      const selectQuery = `
-        SELECT CL.*, User.name as user_name, User.avatar as user_avatar
-        FROM Comment_Likes CL
-        JOIN User ON CL.user_id = User.id
-        WHERE CL.comment_id = ? AND CL.user_id = ?
-      `;
-      
-      return await db.get(selectQuery, [commentId, userId]);
+      await db.execute({
+        sql: `INSERT INTO Comment_Likes (comment_id, user_id) VALUES (?, ?)`,
+        args: [commentId, userId],
+      });
+      const result = await db.execute({
+        sql: `
+          SELECT CL.*, User.name as user_name, User.avatar as user_avatar
+          FROM Comment_Likes CL
+          JOIN User ON CL.user_id = User.id
+          WHERE CL.comment_id = ? AND CL.user_id = ?
+        `,
+        args: [commentId, userId],
+      });
+      return result.rows[0] || null;
     } catch (error) {
-      // Handle unique constraint violation (already liked)
-      if (error.message.includes('UNIQUE constraint failed')) {
-        return null; // Already liked
-      }
+      if (error.message.includes('UNIQUE constraint failed')) return null;
       console.error("Error adding like:", error);
       throw error;
     }
   }
 
-  // Remove a like
   static async removeLike(commentId, userId) {
     try {
       const db = await this.getDb();
-      const query = `
-        DELETE FROM Comment_Likes 
-        WHERE comment_id = ? AND user_id = ?
-      `;
-      const result = await db.run(query, [commentId, userId]);
-      return result.changes > 0; // Returns true if a like was removed
+      await db.execute({
+        sql: `DELETE FROM Comment_Likes WHERE comment_id = ? AND user_id = ?`,
+        args: [commentId, userId],
+      });
+      return true;
     } catch (error) {
       console.error("Error removing like:", error);
       throw error;
     }
   }
 
-  // Check if a user liked a specific comment
   static async hasUserLiked(commentId, userId) {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT 1 FROM Comment_Likes 
-        WHERE comment_id = ? AND user_id = ?
-      `;
-      const result = await db.get(query, [commentId, userId]);
-      return !!result;
+      const result = await db.execute({
+        sql: `SELECT 1 FROM Comment_Likes WHERE comment_id = ? AND user_id = ?`,
+        args: [commentId, userId],
+      });
+      return result.rows.length > 0;
     } catch (error) {
       console.error("Error checking if user liked comment:", error);
       throw error;
     }
   }
 
-  // Get all likes for a specific comment with user details
   static async findByCommentId(commentId) {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT CL.*, User.name as user_name, User.avatar as user_avatar
-        FROM Comment_Likes CL
-        JOIN User ON CL.user_id = User.id
-        WHERE CL.comment_id = ?
-        ORDER BY CL.created_at DESC
-      `;
-      return await db.all(query, [commentId]);
+      const result = await db.execute({
+        sql: `
+          SELECT CL.*, User.name as user_name, User.avatar as user_avatar
+          FROM Comment_Likes CL
+          JOIN User ON CL.user_id = User.id
+          WHERE CL.comment_id = ?
+          ORDER BY CL.created_at DESC
+        `,
+        args: [commentId],
+      });
+      return result.rows;
     } catch (error) {
       console.error("Error finding likes by comment id:", error);
       throw error;
     }
   }
 
-  // Get count of likes for a comment
   static async countByCommentId(commentId) {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT COUNT(*) as count 
-        FROM Comment_Likes 
-        WHERE comment_id = ?
-      `;
-      const result = await db.get(query, [commentId]);
-      return result.count;
+      const result = await db.execute({
+        sql: `SELECT COUNT(*) as count FROM Comment_Likes WHERE comment_id = ?`,
+        args: [commentId],
+      });
+      return result.rows[0].count;
     } catch (error) {
       console.error("Error counting likes by comment id:", error);
       throw error;
     }
   }
 
-  // Get all comments liked by a specific user
   static async findByUserId(userId) {
     try {
       const db = await this.getDb();
-      const query = `
-        SELECT CL.*, 
-               Comment.text as comment_text,
-               Comment.skill_id,
-               Skill.title as skill_title
-        FROM Comment_Likes CL
-        JOIN Comment ON CL.comment_id = Comment.id
-        JOIN Skill ON Comment.skill_id = Skill.id
-        WHERE CL.user_id = ?
-        ORDER BY CL.created_at DESC
-      `;
-      return await db.all(query, [userId]);
+      const result = await db.execute({
+        sql: `
+          SELECT CL.*, 
+                 Comment.text as comment_text,
+                 Comment.skill_id,
+                 Skill.title as skill_title
+          FROM Comment_Likes CL
+          JOIN Comment ON CL.comment_id = Comment.id
+          JOIN Skill ON Comment.skill_id = Skill.id
+          WHERE CL.user_id = ?
+          ORDER BY CL.created_at DESC
+        `,
+        args: [userId],
+      });
+      return result.rows;
     } catch (error) {
       console.error("Error finding likes by user id:", error);
       throw error;
     }
   }
 
-  // Get likes for multiple comments (useful for batch operations)
   static async findByCommentIds(commentIds) {
     try {
       if (!commentIds.length) return [];
-      
       const db = await this.getDb();
       const placeholders = commentIds.map(() => '?').join(',');
-      const query = `
-        SELECT CL.*, User.name as user_name, User.avatar as user_avatar
-        FROM Comment_Likes CL
-        JOIN User ON CL.user_id = User.id
-        WHERE CL.comment_id IN (${placeholders})
-        ORDER BY CL.created_at DESC
-      `;
-      return await db.all(query, commentIds);
+      const result = await db.execute({
+        sql: `
+          SELECT CL.*, User.name as user_name, User.avatar as user_avatar
+          FROM Comment_Likes CL
+          JOIN User ON CL.user_id = User.id
+          WHERE CL.comment_id IN (${placeholders})
+          ORDER BY CL.created_at DESC
+        `,
+        args: commentIds,
+      });
+      return result.rows;
     } catch (error) {
       console.error("Error finding likes by comment ids:", error);
       throw error;
     }
   }
 
-  // Delete all likes for a comment (useful when deleting a comment)
   static async deleteByCommentId(commentId) {
     try {
       const db = await this.getDb();
-      const query = `DELETE FROM Comment_Likes WHERE comment_id = ?`;
-      await db.run(query, [commentId]);
+      await db.execute({
+        sql: `DELETE FROM Comment_Likes WHERE comment_id = ?`,
+        args: [commentId],
+      });
       return true;
     } catch (error) {
       console.error("Error deleting likes by comment id:", error);
@@ -181,12 +170,13 @@ class CommentLikesModel {
     }
   }
 
-  // Delete all likes by a user (useful when deleting a user)
   static async deleteByUserId(userId) {
     try {
       const db = await this.getDb();
-      const query = `DELETE FROM Comment_Likes WHERE user_id = ?`;
-      await db.run(query, [userId]);
+      await db.execute({
+        sql: `DELETE FROM Comment_Likes WHERE user_id = ?`,
+        args: [userId],
+      });
       return true;
     } catch (error) {
       console.error("Error deleting likes by user id:", error);
@@ -194,11 +184,9 @@ class CommentLikesModel {
     }
   }
 
-  // Toggle like (add if not exists, remove if exists)
   static async toggleLike(commentId, userId) {
     try {
       const hasLiked = await this.hasUserLiked(commentId, userId);
-      
       if (hasLiked) {
         await this.removeLike(commentId, userId);
         return { liked: false, commentId, userId };

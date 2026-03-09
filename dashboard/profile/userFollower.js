@@ -4,26 +4,15 @@ const jwt = require("../../middleware/jwt");
 const { errHandler } = require("../../errorHandler");
 const UserFollows = require("../../models/userFollows");
 
-router.get("/profile/followers", jwt.authMiddleware, async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-
-    const followers = await UserFollows.getFollowers(userId, userId);
-
-    res.json(followers);
-  } catch (err) {
-    next(err);
-  }
-});
-
 router.get(
   "/profile/followers/byId/:id",
   jwt.authMiddleware,
   async (req, res, next) => {
     try {
+      const loggedUserId = req.user.id;
       const userId = req.params.id;
 
-      const followers = await UserFollows.getFollowers(userId, userId);
+      const followers = await UserFollows.getFollowers(userId, loggedUserId);
 
       res.json(followers);
     } catch (err) {
@@ -32,23 +21,15 @@ router.get(
   },
 );
 
-router.get("/profile/following", jwt.authMiddleware, async (req, res, next) => {
-  try {
-    const following = await UserFollows.getFollowing(req.user.id);
-    res.json(following);
-  } catch (err) {
-    next(err);
-  }
-});
-
 router.get(
   "/profile/following/byId/:id",
   jwt.authMiddleware,
   async (req, res, next) => {
     try {
+      const loggedUserId = req.user.id;
       const userId = req.params.id;
 
-      const following = await UserFollows.getFollowing(userId);
+      const following = await UserFollows.getFollowing(userId, loggedUserId);
 
       res.json(following);
     } catch (err) {
@@ -62,20 +43,20 @@ router.post(
   jwt.authMiddleware,
   async (req, res, next) => {
     try {
-      console.log("from " + req.user.id + " Follow request received for userId:", req.params.userId);
       const followerId = req.user.id;
       const followingId = req.params.userId;
 
-      if (followerId === followingId)
-        throw errHandler("You can't follow yourself");
+      if (followerId === followingId) {
+        return res.status(400).json({ success: false, message: "You can't follow yourself" });
+      }
 
       await UserFollows.follow(followerId, followingId);
 
-      res.json({ message: "Followed successfully" });
+      res.json({ success: true, message: "Followed successfully" });
     } catch (err) {
       next(err);
     }
-  },
+  }
 );
 
 router.delete("/follow/:userId", jwt.authMiddleware, async (req, res) => {

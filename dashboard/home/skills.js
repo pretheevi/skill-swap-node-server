@@ -49,7 +49,17 @@ router.post(
 router.get("/skills", jwt.authMiddleware, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const skills = await SkillsModel.getAllSkillsWithCommentAndMedia(userId);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    const recResponse = await fetch(`http://localhost:8001/recommend/${userId}?n=${page * limit}`);
+    const allRecommends = await recResponse.json();
+
+    // slice the exact chunk for this page
+    const pageRecommends = allRecommends.slice(offset, offset + limit);
+
+    const skills = await SkillsModel.getAllSkillsWithCommentAndMedia(userId, pageRecommends);
     res.json(skills);
   } catch (err) {
     next(err);
@@ -201,12 +211,32 @@ router.put(
   },
 );
 
-router.delete("/skills/:id", jwt.authMiddleware, async (req, res) => {
+
+
+router.patch("/skills/:skill_id", jwt.authMiddleware, async (req, res, next) => {
+  try{
+    const skill_id = req.params.skill_id;
+    const { description } = req.body;
+    // 2. Find skill
+    const skill = await SkillsModel.findSkillById(skill_id);
+
+    if (!skill) throw errHandler(404, "Skill not found");
+
+        // 3. Authorization check
+    if (skill.user_id !== req.user.id)
+      throw errHandler(403, "Not authorized to delete this skill");
+
+    const result = await SkillsModel.updateSkillDescription(skill_id, description);
+    res.json({ success: true, message: 'Description updated' });
+  } catch(error) {
+    next(error)
+  }
+})
+
+
+router.delete("/skills/:id", jwt.authMiddleware, async (req, res, next) => {
   try {
     const skill_id = req.params.id;
-
-    // 1. Validate skill_id
-    if (!skill_id || isNaN(skill_id)) throw errHandler(400, "Invalid skill ID");
 
     // 2. Find skill
     const skill = await SkillsModel.findSkillById(skill_id);

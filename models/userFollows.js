@@ -1,146 +1,136 @@
 const connectDb = require("../db");
-const {errHandler} = require('../errorHandler');
+const { errHandler } = require('../errorHandler');
 
 class UserFollows {
   static async getDb() {
-    const db = await connectDb();
-    return db;
+    return await connectDb();
   }
+
   static async createTable() {
     try {
       const db = await this.getDb();
-      const query = `
+      await db.execute(`
         CREATE TABLE IF NOT EXISTS user_follows (
           follower_id TEXT NOT NULL,
           following_id TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
           FOREIGN KEY (follower_id) REFERENCES User(id) ON DELETE CASCADE,
           FOREIGN KEY (following_id) REFERENCES User(id) ON DELETE CASCADE,
-
           UNIQUE (follower_id, following_id),
           CHECK (follower_id != following_id)
         );
-        `;
-      await db.run(query);
+      `);
     } catch (error) {
       console.log(error);
     }
   }
 
-  // UserFollows.js
   static async getCounts(userId) {
     const db = await this.getDb();
 
-    const followers = await db.get(
-      `SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?`,
-      [userId]
-    );
+    const followersResult = await db.execute({
+      sql: `SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?`,
+      args: [userId],
+    });
 
-    const following = await db.get(
-      `SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?`,
-      [userId]
-    );
+    const followingResult = await db.execute({
+      sql: `SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?`,
+      args: [userId],
+    });
 
     return {
-      followers: followers.count,
-      following: following.count,
+      followers: followersResult.rows[0].count,
+      following: followingResult.rows[0].count,
     };
   }
-  
-static async getFollowers(userId, currentUserId, limit = 20, offset = 0) {
-  const db = await this.getDb();
 
-  return db.all(
-    `
-    SELECT 
-      u.id,
-      u.name,
-      u.avatar,
-      CASE 
-        WHEN uf2.follower_id IS NOT NULL THEN 1
-        ELSE 0
-      END AS is_following
-    FROM user_follows AS uf
-    JOIN User AS u 
-      ON u.id = uf.follower_id
-    LEFT JOIN user_follows AS uf2
-      ON uf2.follower_id = ?
-     AND uf2.following_id = u.id
-    WHERE uf.following_id = ?
-    LIMIT ? OFFSET ?
-    `,
-    [currentUserId, userId, limit, offset]
-  );
-}
+  static async getFollowers(userId, loggedUserId, limit = 20, offset = 0) {
+    try {
+      const db = await this.getDb();
+      const result = await db.execute({
+        sql: `
+          SELECT 
+            u.id,
+            u.name,
+            u.avatar,
+            CASE WHEN EXISTS (
+              SELECT 1 FROM user_follows
+              WHERE follower_id = ? AND following_id = u.id
+            ) THEN 1 ELSE 0 END AS is_following
+          FROM user_follows AS uf
+          JOIN User AS u ON u.id = uf.follower_id
+          WHERE uf.following_id = ?
+          LIMIT ? OFFSET ?
+        `,
+        args: [loggedUserId, userId, limit, offset],
+      });
+      return result.rows;
+    } catch (error) {
+      throw new Error(`getFollowers failed: ${error.message}`);
+    }
+  }
 
-
-  static async getFollowing(userId, limit = 20, offset = 0) {
-    const db = await this.getDb();
-
-    return db.all(
-      `
-      SELECT 
-        u.id,
-        u.name,
-        u.avatar,
-        true AS is_following
-      FROM user_follows AS uf
-      JOIN User AS u ON u.id = uf.following_id
-      WHERE uf.follower_id = ?
-      LIMIT ? OFFSET ?
-      `,
-      [userId, limit, offset]
-    );
+  static async getFollowing(userId, loggedUserId, limit = 20, offset = 0) {
+    try {
+      const db = await this.getDb();
+      const result = await db.execute({
+        sql: `
+          SELECT 
+            u.id,
+            u.name,
+            u.avatar,
+            CASE WHEN EXISTS (
+              SELECT 1 FROM user_follows
+              WHERE follower_id = ? AND following_id = u.id
+            ) THEN 1 ELSE 0 END AS is_following
+          FROM user_follows AS uf
+          JOIN User AS u ON u.id = uf.following_id
+          WHERE uf.follower_id = ?
+          LIMIT ? OFFSET ?
+        `,
+        args: [loggedUserId, userId, limit, offset],
+      });
+      return result.rows;
+    } catch (error) {
+      throw new Error(`getFollowing failed: ${error.message}`);
+    }
   }
 
   static async isFollowing(followerId, followingId) {
     const db = await this.getDb();
-
-    const row = await db.get(
-      `
-      SELECT 1
-      FROM user_follows
-      WHERE follower_id = ?
-        AND following_id = ?
-      LIMIT 1
-      `,
-      [followerId, followingId]
-    );
-
-    return !!row;
+    const result = await db.execute({
+      sql: `SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = ? LIMIT 1`,
+      args: [followerId, followingId],
+    });
+    return result.rows.length > 0;
   }
-
-
 
   static async follow(followerId, followingId) {
     try {
       const db = await this.getDb();
 
-      const exists = await db.get('SELECT 1 FROM user_follows WHERE follower_id=? AND following_id=?', [followerId, followingId]);
+      const exists = await db.execute({
+        sql: `SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = ?`,
+        args: [followerId, followingId],
+      });
 
-      if(exists) throw errHandler(400, 'Already following');
+      if (exists.rows.length > 0) throw errHandler(400, 'Already following');
 
-      const query = `
-      INSERT INTO user_follows (follower_id, following_id)
-      VALUES (?, ?)
-    `;
-
-      await db.run(query, [followerId, followingId]);
-    } catch(err) {
+      await db.execute({
+        sql: `INSERT INTO user_follows (follower_id, following_id) VALUES (?, ?)`,
+        args: [followerId, followingId],
+      });
+    } catch (err) {
       throw err;
     }
   }
 
   static async unfollow(followerId, followingId) {
     const db = await this.getDb();
-
-    const query = `
-    DELETE FROM user_follows
-    WHERE follower_id = ? AND following_id = ?
-  `;
-
-    await db.run(query, [followerId, followingId]);
+    await db.execute({
+      sql: `DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?`,
+      args: [followerId, followingId],
+    });
   }
 }
 

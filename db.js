@@ -1,12 +1,11 @@
-const path = require("path");
-const { open } = require("sqlite");
-const sqlite3 = require("sqlite3");
+const { createClient } = require('@libsql/client');
+require('dotenv').config();
 
 async function connectDb() {
   try {
-    const db = await open({
-      filename: path.join(__dirname, "database.sqlite"),
-      driver: sqlite3.Database,
+    const db = createClient({
+      url: process.env.TURSO_URL,
+      authToken: process.env.TURSO_TOKEN,
     });
     return db;
   } catch (error) {
