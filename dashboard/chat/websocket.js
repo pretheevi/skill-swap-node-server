@@ -29,6 +29,8 @@ async function wsConnectionHandler(ws, req) {
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
 
+    if (msg.type === 'ping') return;
+    
     const { receiver_id, text } = msg;
     if (!receiver_id || !text) return;
     console.log('ws', msg);
