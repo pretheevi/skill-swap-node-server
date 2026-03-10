@@ -55,7 +55,7 @@ router.get("/skills", jwt.authMiddleware, async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
     console.log(`https://imbaki-skill-swap-ml.hf.space/recommend/${userId}?n=${page * limit}`)
-    const recResponse = await fetch(`http://localhost:8001/recommend/${userId}?n=${page * limit}`);
+    const recResponse = await fetch(`https://imbaki-skill-swap-ml.hf.space/recommend/${userId}?n=${page * limit}`);
     const allRecommends = await recResponse.json();
 
     // slice the exact chunk for this page
