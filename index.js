@@ -17,6 +17,9 @@ const userFollows = require("./dashboard/profile/userFollower");
 const exploreRoutes = require("./dashboard/home/explore");
 const skillLikeRoutes = require("./dashboard/home/skillLike");
 
+// Chat applications
+const ChatRoutes = require("./dashboard/chat/chat");
+
 // initialize Database, Create server and WebSocket server
 const app = express();
 let wss;
@@ -79,6 +82,7 @@ app.use("/api", skillRoutes);
 app.use("/api", skillLikeRoutes);
 app.use("/api", comment);
 app.use("/api", exploreRoutes);
+app.use("/api", ChatRoutes);
 
 // global error handler
 app.use((err, req, res, next) => {
