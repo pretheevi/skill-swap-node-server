@@ -5,12 +5,14 @@ const SkillMediaModel = require("../../models/skillMedia");
 const SkillLikesModel = require('../../models/skillLikes');
 const jwt = require("../../middleware/jwt");
 const { uploadPostMedia } = require("../../middleware/upload");
+const { skillPostLimiter } = require("../../middleware/rateLimit");
 const cloudinary = require("../../config/cloudinary");
 const { errHandler } = require("../../errorHandler");
 
 router.post(
   "/skills",
   jwt.authMiddleware,
+  skillPostLimiter,
   uploadPostMedia,
   async (req, res, next) => {
     try {
@@ -53,7 +55,7 @@ router.get("/skills", jwt.authMiddleware, async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
     console.log(`https://imbaki-skill-swap-ml.hf.space/recommend/${userId}?n=${page * limit}`)
-    const recResponse = await fetch(`https://imbaki-skill-swap-ml.hf.space/recommend/${userId}?n=${page * limit}`);
+    const recResponse = await fetch(`http://localhost:8001/recommend/${userId}?n=${page * limit}`);
     const allRecommends = await recResponse.json();
 
     // slice the exact chunk for this page
@@ -248,19 +250,20 @@ router.delete("/skills/:id", jwt.authMiddleware, async (req, res, next) => {
       throw errHandler(403, "Not authorized to delete this skill");
 
     // 4. Delete associated media file if it exists
-    const media = await SkillMediaModel.getMediaBySkillId(skill_id);
+    const mediaList = await SkillMediaModel.getMediaBySkillId(skill_id);
 
-    if (media?.public_id) {
-      try {
-        const result = await cloudinary.uploader.destroy(media.public_id, {
-          resource_type: "image",
-        });
-        console.log("Cloudinary destroy result:", result);
-      } catch (cloudErr) {
-        console.log("cloudinary delete failed", error);
+    for (const media of mediaList) {
+      if (media?.public_id) {
+        try {
+          await cloudinary.uploader.destroy(media.public_id, {
+            resource_type: media.media_type === 'video' ? 'video' : 'image',
+          });
+        } catch (cloudErr) {
+          console.log("cloudinary delete failed", cloudErr);
+        }
       }
     }
-
+    
     // 5. Delete skill from database
     await SkillsModel.deleteSkillById(skill_id);
 

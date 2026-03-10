@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require("../../middleware/jwt");
 const { errHandler } = require("../../errorHandler");
 const UserFollows = require("../../models/userFollows");
+const { followUnfollowLimiter } = require('../../middleware/rateLimit');
 
 router.get(
   "/profile/followers/byId/:id",
@@ -41,6 +42,7 @@ router.get(
 router.post(
   "/follow/:userId",
   jwt.authMiddleware,
+  followUnfollowLimiter,
   async (req, res, next) => {
     try {
       const followerId = req.user.id;
@@ -59,7 +61,7 @@ router.post(
   }
 );
 
-router.delete("/follow/:userId", jwt.authMiddleware, async (req, res) => {
+router.delete("/follow/:userId", jwt.authMiddleware, followUnfollowLimiter, async (req, res) => {
   try {
     await UserFollows.unfollow(req.user.id, req.params.userId);
     res.json({ message: "Unfollowed successfully" });

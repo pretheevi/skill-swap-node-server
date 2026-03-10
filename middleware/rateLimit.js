@@ -25,37 +25,48 @@ const registerLimiter = rateLimit({
 });
 
 const followUnfollowLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 30,
-  message: (req, res) => {
-    return res.status(429).json({
-      success: false,
-      message: "Too many attemps, wait 15 minutes",
-    });
-  }
-});
-
-const commentLikeLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 min
   max: 30,
   message: (req, res) => {
     return res.status(429).json({
       success: false,
-      message: "Too many attempts, wait 15 minutes",
+      message: "Do not spam the buttom 🙏😭. wait 5 minutes",
+    });
+  }
+});
+
+const commentLikeLimiter = rateLimit({
+  windowMs: 60 * 1000, // 5 min
+  max: 20,
+  message: (req, res) => {
+    return res.status(429).json({
+      success: false,
+      message: "Too many attempts, wait 1 minutes",
     });
   }
 });
 
 const skillLikeLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 30,
+  windowMs: 60 * 1000,
+  max: 20,
+  message: (req, res) => {
+    return res.status(429).json({
+      success: false,
+      message: "Too many attempts, wait 1 minutes",
+    })
+  }
+})
+
+const skillPostLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,                   // 5 posts per minute is reasonable
   message: (req, res) => {
     return res.status(429).json({
       success: false,
       message: "Too many attempts, wait 15 minutes",
     })
   }
-})
+});
 
 module.exports = { 
   loginLimiter, 
@@ -63,4 +74,5 @@ module.exports = {
   followUnfollowLimiter, 
   commentLikeLimiter,
   skillLikeLimiter,
+  skillPostLimiter,
 };
