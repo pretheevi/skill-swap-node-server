@@ -32,8 +32,24 @@ router.get("/chat/rooms", JWT.authMiddleware, async (req, res, next) => {
 router.get("/chat/room/conversation/:roomId", JWT.authMiddleware, async (req, res, next) => {
   try {
     const roomId = req.params.roomId;
-    const roomConversation = await Message.findByRoomId(roomId);
-    res.json({success: true, roomConversation});
+    const limit = parseInt(req.query.limit) || 30;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const [roomConversation, totalCount] = await Promise.all([
+      Message.findByRoomId(roomId, limit, offset),
+      Message.getCountByRoomId(roomId)
+    ]);
+    
+    res.json({
+      success: true, 
+      roomConversation,
+      pagination: {
+        limit,
+        offset,
+        total: totalCount,
+        hasMore: offset + limit < totalCount
+      }
+    });
   } catch(error) {
     next(error);
   }

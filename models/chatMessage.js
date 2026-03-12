@@ -48,8 +48,8 @@ class Message {
     }
   }
 
-  // get all messages in a room with pagination
-  static async findByRoomId(roomId, limit = 50, offset = 0) {
+  // Add to your Message model
+  static async findByRoomId(roomId, limit = 30, offset = 0) {
     try {
       const db = await this.getDb();
       const result = await db.execute({
@@ -64,6 +64,19 @@ class Message {
         args: [roomId, limit, offset],
       });
       return result.rows;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async getCountByRoomId(roomId) {
+    try {
+      const db = await this.getDb();
+      const result = await db.execute({
+        sql: `SELECT COUNT(*) as count FROM Message WHERE room_id = ?`,
+        args: [roomId],
+      });
+      return result.rows[0].count;
     } catch (error) {
       throw error;
     }

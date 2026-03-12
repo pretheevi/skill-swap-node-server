@@ -91,8 +91,8 @@ router.post(
             console.log("cloudinary delete failed", cloudErr);
           }
         }
-        updateData.avatar = req.file.path;
-        updateData.avatar_public_id = req.file.filename;
+        updateData.avatar = req.file.cloudinary_url;
+        updateData.avatar_public_id = req.file.public_id;
       } else if (req.body.remove_avatar === "true" || req.body.avatar === "") {
         if (user.avatar_public_id) {
           try {
