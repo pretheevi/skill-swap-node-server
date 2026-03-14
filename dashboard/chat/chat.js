@@ -23,6 +23,7 @@ router.get("/chat/rooms", JWT.authMiddleware, async (req, res, next) => {
   try {
     const userId = req.user.id;
     const rooms = await ChatRoom.findByUserId(userId);
+    // console.log('aaaaaa',rooms)
     res.json({success: true, rooms})
   } catch(error) {
     next(error);

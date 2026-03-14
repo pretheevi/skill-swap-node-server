@@ -37,6 +37,7 @@ class Message {
   static async create(roomId, senderId, text) {
     try {
       const db = await this.getDb();
+      console.log('aaaabbbb')
       const messageId = uuidv4();
       await db.execute({
         sql: `INSERT INTO Message (id, room_id, sender_id, text) VALUES (?, ?, ?, ?)`,
@@ -46,6 +47,7 @@ class Message {
         sql: `SELECT * FROM Message WHERE id = ?`,
         args: [messageId],
       });
+      console.log(result.rows);
       return result.rows[0] || null;
     } catch (error) {
       throw error;
@@ -53,7 +55,7 @@ class Message {
   }
 
   // Add to your Message model
-  static async findByRoomId(roomId, limit = 30, offset = 0) {
+  static async findByRoomId(roomId, limit = 100, offset = 0) {
     try {
       const db = await this.getDb();
       const result = await db.execute({
@@ -62,12 +64,12 @@ class Message {
           FROM Message m
           JOIN User u ON u.id = m.sender_id
           WHERE m.room_id = ?
-          ORDER BY m.created_at DESC, m.id DESC
+          ORDER BY m.created_at DESC
           LIMIT ? OFFSET ?
         `,
         args: [roomId, limit, offset],
       });
-      return result.rows;
+      return result.rows.reverse();
     } catch (error) {
       throw error;
     }
