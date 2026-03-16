@@ -93,7 +93,10 @@ class Message {
     try {
       const db = await this.getDb();
       await db.execute({
-        sql: `UPDATE Message SET is_read = 1 WHERE room_id = ? AND sender_id != ? AND is_read = 0`,
+        sql: `
+          UPDATE Message 
+          SET is_read = 1 
+          WHERE room_id = ? AND sender_id != ? AND is_read = 0`,
         args: [roomId, userId],
       });
       return true;

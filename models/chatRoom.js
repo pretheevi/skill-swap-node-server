@@ -95,9 +95,9 @@ class ChatRoom {
               WHERE room_id = cr.id AND is_read = 0 AND sender_id != ?
             ) AS unread_count
           FROM ChatRoom cr
-          JOIN User u ON u.id = CASE 
-            WHEN cr.user1_id = ? THEN cr.user2_id 
-            ELSE cr.user1_id 
+          JOIN User u ON u.id = CASE
+            WHEN cr.user1_id = ? THEN cr.user2_id
+            ELSE cr.user1_id
           END
           LEFT JOIN Message m ON m.id = (
             SELECT id FROM Message WHERE room_id = cr.id ORDER BY created_at DESC LIMIT 1

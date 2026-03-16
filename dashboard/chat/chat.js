@@ -56,4 +56,24 @@ router.get("/chat/room/conversation/:roomId", JWT.authMiddleware, async (req, re
   }
 });
 
+
+// PATCH /chat/room/:room_id/read
+router.patch('/chat/room/:room_id/read', JWT.authMiddleware, async (req, res) => {
+  const { room_id } = req.params;
+  const userId = req.user.id;
+
+  await Message.markAsRead(room_id, userId)
+
+  res.json({ success: true });
+});
+
+router.delete('/chat/message/:messageId', JWT.authMiddleware, async (req, res) => {
+  const messageId = req.params.messageId;
+  const userId = req.user.id;
+
+  await Message.delete(messageId, userId);
+
+  res.json({ success: true });
+})
+
 module.exports = router;

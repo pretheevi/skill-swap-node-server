@@ -132,6 +132,23 @@ class UserFollows {
       args: [followerId, followingId],
     });
   }
+
+  static async getContactIds(userId) {
+    const db = await this.getDb();
+    const result = await db.execute({
+      sql: `
+        SELECT DISTINCT following_id AS contact_id
+        FROM user_follows
+        WHERE follower_id = ?
+        UNION
+        SELECT DISTINCT follower_id AS contact_id
+        FROM user_follows
+        WHERE following_id = ?
+      `,
+      args: [userId, userId],   
+    });
+    return result.rows.map(row => row.contact_id);
+  }
 }
 
 module.exports = UserFollows;
