@@ -57,7 +57,7 @@ async function wsConnectionHandler(ws, req) {
     const sender_id = userId;
     let type, receiver_id, text, room_id;
     try{
-      ({ room_id, receiver_id, type, text } = JSON.parse(data));
+      ({ room_id, receiver_id, type, text, message_id } = JSON.parse(data));
     } catch(error) {
       ws.send(JSON.stringify({success: false, message: "Incorrect data format"}));
       return;
@@ -69,8 +69,7 @@ async function wsConnectionHandler(ws, req) {
     }
 
     if (type === 'delete_message') {
-      const { message_id } = JSON.parse(data);
-      const targets = [receiver_id, sender_id]; // ✅ both users
+      const targets = [receiver_id, sender_id]; // both users
 
       for (const targetId of targets) {
         if (clients[targetId]) {
@@ -101,13 +100,14 @@ async function wsConnectionHandler(ws, req) {
       room_id = newRoom.id;
     }
 
-    await Message.create(room_id, sender_id, text);
+    const newMessage = await Message.create(room_id, sender_id, text);
     if (clients[receiver_id]) {
       for (let cws of Array.from(clients[receiver_id])) {
         if (cws.readyState === WebSocket.OPEN) {
           cws.send(JSON.stringify({
             room_id,
             sender_id,
+            message_id: newMessage.id,
             type,
             text,
             success: true,
@@ -122,6 +122,7 @@ async function wsConnectionHandler(ws, req) {
       ws.send(JSON.stringify({
         room_id,
         sender_id,
+        message_id: newMessage.id,
         type,
         text,
         success: true,
