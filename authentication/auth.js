@@ -8,7 +8,7 @@ const {loginLimiter, registerLimiter} = require('../middleware/rateLimit');
 const {errHandler} = require('../errorHandler');
 
 // LOGIN USER
-router.post('/login', loginLimiter, async (req, res, next) => {
+router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
