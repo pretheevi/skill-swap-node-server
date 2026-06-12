@@ -23,7 +23,7 @@ const ChatRoutes = require("./dashboard/chat/chat");
 // initialize Database, Create server and WebSocket server
 const app = express();
 let wss;
-async function initializatDbAndServer() {
+async function initializeDbAndServer() {
   try {
     await initializeDb();
     console.log("Database initialized");
@@ -43,16 +43,12 @@ async function initializatDbAndServer() {
     process.exit(1);
   }
 }
-initializatDbAndServer();
+initializeDbAndServer();
 
 const allowedOrigins = [
   "https://insta-mirror-client.onrender.com",
-  "https://skillswap-aead1adi9-prethiveerajs-projects.vercel.app",
-  "https://skillswap-git-main-prethiveerajs-projects.vercel.app",
-  "https://skillswap-zeta-seven.vercel.app",
   "http://127.0.0.1:5173",
-  "http://127.0.0.1:5174",
-  "http://localhost:5174",
+  "http://localhost:5173"
 ];
 
 app.use(

@@ -7,7 +7,7 @@ const loginLimiter = rateLimit({
   message: (req, res) => {
     return res.status(429).json({
       success: false,
-      message: "Too many login attemps, wait 15 minutes",
+      message: "Too many login attempts, wait 15 minutes",
     });
   },
   standardHeaders: true,
@@ -30,7 +30,7 @@ const followUnfollowLimiter = rateLimit({
   message: (req, res) => {
     return res.status(429).json({
       success: false,
-      message: "Do not spam the buttom 🙏😭. wait 5 minutes",
+      message: "Do not spam the button 🙏😭. wait 5 minutes",
     });
   }
 });

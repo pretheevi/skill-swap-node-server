@@ -48,29 +48,17 @@ router.post('/login', loginLimiter, async (req, res, next) => {
 router.post('/register', registerLimiter, async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
-
     // Basic validation
     if (!name || !Validate.register(name, email, password)) throw errHandler(400, 'Invalid input data');
-
     // Check if user already exists
     const emailExist = await UserModel.findByEmail(email);
-
     if (emailExist && emailExist.email === email) throw errHandler(400, 'Email already signed up');
-
     const nameExist = await UserModel.findByName(name);
-
     if(nameExist && nameExist.name === name) throw errHandler(400, 'Username already taken');
-    
     // Hash password
-    const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash(password, 10);
-
     // Save user
     const newUser = await UserModel.create({name, email, password: hashedPassword});
-
-    // Generate token immediately after registration (optional)
-    const token = jwt.sign({ email });
-
     res.status(201).json({
       message: "User registered successfully",
       newUser: {
